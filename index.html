@@ -170,56 +170,58 @@
 
     <script>
         // Game Constants
-        const TILE_SIZE = 40; // Size of each tile in pixels
-        const MAP_WIDTH = 20; // Map width in tiles
-        const MAP_HEIGHT = 15; // Map height in tiles
+        const TILE_SIZE = 40; // Tamanho de cada tile em pixels
+        const MAP_WIDTH = 20; // Largura do mapa em tiles
+        const MAP_HEIGHT = 15; // Altura do mapa em tiles
         const CANVAS_WIDTH = MAP_WIDTH * TILE_SIZE;
         const CANVAS_HEIGHT = MAP_HEIGHT * TILE_SIZE;
 
-        const PLAYER_SPEED_MS = 150; // Milliseconds delay between player movements
-        const ENEMY_NORMAL_SPEED_MS = 300; // Thief movement speed on Normal difficulty
-        const ENEMY_MEDIA_SPEED_MS = 150; // Thief movement speed on Media difficulty
-        const ENEMY_EXTREMEPOWER_SPEED_MS = 30; // Thief movement speed on Extremepower difficulty (10x faster)
+        const PLAYER_SPEED_MS = 150; // Atraso em milissegundos entre os movimentos do jogador
+        const ENEMY_BASE_MOVE_DELAY_MS = 300; // Atraso base de movimento do ladrão
+        const ENEMY_SPEED_FACTOR_NORMAL = 1; // Fator de velocidade para dificuldade Normal
+        const ENEMY_SPEED_FACTOR_MEDIA = 0.5; // Fator de velocidade para dificuldade Média (2x mais rápido)
+        const ENEMY_SPEED_FACTOR_EXTREMEPOWER = 0.1; // Fator de velocidade para dificuldade Extremepower (10x mais rápido)
+        const ENEMY_CAPTURED_SPEED_MULTIPLIER = 0.5; // Multiplicador para a velocidade do ladrão ao capturar um NPC (2x mais rápido)
 
-        const DIAMOND_COUNT = 50; // Total number of diamonds in the game (5x more)
-        const THIEF_COUNT_NORMAL = 5; // Base number of thieves for Normal difficulty
-        const THIEF_COUNT_MEDIA = THIEF_COUNT_NORMAL * 2; // Double thieves for Media difficulty
-        const THIEF_COUNT_EXTREMEPOWER = THIEF_COUNT_NORMAL * 4; // Quadruple thieves for Extremepower difficulty
-        const NPC_NAMES = ['Gugu', 'Sekku', 'Dudu', 'Bruno', 'Érico']; // Names of non-playable characters
-        const NPC_EMOJI = '🚶'; // Emoji for NPCs
-        const PLAYER_NAME = 'Fábio Agent'; // Name for the playable character
+        const DIAMOND_COUNT = 50; // Número total de diamantes no jogo
+        const THIEF_COUNT_NORMAL = 5; // Número base de ladrões para dificuldade Normal
+        const THIEF_COUNT_MEDIA = THIEF_COUNT_NORMAL * 2; // Dobro de ladrões para dificuldade Média
+        const THIEF_COUNT_EXTREMEPOWER = THIEF_COUNT_NORMAL * 4; // Quádruplo de ladrões para dificuldade Extremepower
+        const NPC_NAMES = ['Gugu', 'Sekku', 'Dudu', 'Bruno', 'Érico']; // Nomes dos personagens não jogáveis
+        const NPC_EMOJI = '🚶'; // Emoji para NPCs
+        const PLAYER_NAME = 'Fábio Agent'; // Nome do personagem jogável
 
-        // Player & Drone Attack Statistics
+        // Constante para limitar as tentativas de posicionamento
+        const MAX_PLACEMENT_ATTEMPTS_PER_ENTITY = 500; 
+
+        // Estatísticas do Jogador e Ataques do Drone
         const PLAYER_MAX_HEALTH = 100;
         const DRONE_ATTACKS = {
             vrombulha: { name: 'Vrombulha', damage: 1, cooldown: 1000, currentCooldown: 0, buttonId: 'attack-vrombulha', pbId: 'pb-vrombulha' },
             oinikmask: { name: 'Oinikmask', damage: 3, cooldown: 3000, currentCooldown: 0, buttonId: 'attack-oinikmask', pbId: 'pb-oinikmask' },
             niuciiii: { name: 'Niuciiii', damage: 15, cooldown: 10000, currentCooldown: 0, buttonId: 'attack-niuciiii', pbId: 'pb-niuciiii' },
         };
-        const ENEMY_MAX_HEALTH = 10; // Health of each thief
+        const ENEMY_MAX_HEALTH = 10; // Saúde de cada ladrão
 
-        // Game State Variables
-        let gamePhase = 'intro'; // Current phase: 'intro', 'playing', 'battle', 'gameOver'
-        let player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH }; // Player's position and health
-        let enemies = []; // Array to store thief objects {x, y, health}
-        let diamonds = []; // Array to store diamond objects {x, y}
-        let npcs = []; // Array to store NPC objects {x, y, name, capturedBy: enemy_object || null}
-        let map = []; // 2D array representing the city map (0 = Road, 1 = Building)
-        let difficulty = 'normal'; // Current difficulty setting
-        let enemySpeed = ENEMY_NORMAL_SPEED_MS; // Current thief movement speed
-        let numThievesToPlace = THIEF_COUNT_NORMAL; // Number of thieves to place based on difficulty
+        // Variáveis de Estado do Jogo
+        let gamePhase = 'intro'; // Fase atual: 'intro', 'playing', 'battle', 'gameOver'
+        let player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH, lastMoveTime: 0 }; // Posição e saúde do jogador
+        let enemies = []; // Array para armazenar objetos de ladrões {x, y, health, currentSpeed, lastMoveTimestamp}
+        let diamonds = []; // Array para armazenar objetos de diamantes {x, y}
+        let npcs = []; // Array para armazenar objetos de NPC {x, y, name, capturedBy: enemy_object || null}
+        let map = []; // Array 2D representando o mapa da cidade (0 = Estrada, 1 = Prédio)
+        let difficulty = 'normal'; // Configuração de dificuldade atual
+        let numThievesToPlace = THIEF_COUNT_NORMAL; // Número de ladrões a serem colocados com base na dificuldade
 
-        let currentEnemyInBattle = null; // Reference to the enemy currently in battle
-        let lastEnemyMoveTime = 0; // Timestamp of the last enemy movement
-        let lastPlayerMoveTime = 0; // Timestamp of the last player movement
-        let animationFrameId = null; // Stores the ID returned by requestAnimationFrame for cancellation
+        let currentEnemyInBattle = null; // Referência ao inimigo atualmente em batalha
+        let animationFrameId = null; // Armazena o ID retornado por requestAnimationFrame para cancelamento
 
-        // DOM Element References
+        // Referências de Elementos DOM
         const gameIntroScreen = document.getElementById('game-intro');
         const gameScreen = document.getElementById('game-screen');
         const gameOverScreen = document.getElementById('game-over-screen');
         const gameCanvas = document.getElementById('gameCanvas');
-        const ctx = gameCanvas.getContext('2d'); // 2D rendering context for the canvas
+        const ctx = gameCanvas.getContext('2d'); // Contexto de renderização 2D para o canvas
 
         const playerHealthDisplay = document.getElementById('player-health');
         const diamondsRemainingDisplay = document.getElementById('diamonds-remaining');
@@ -230,36 +232,36 @@
         const gameMessage = document.getElementById('game-message');
         const gameOverTitle = document.getElementById('game-over-title');
         const gameOverMessage = document.getElementById('game-over-message');
-        const battleEnemyEmojiDisplay = document.getElementById('battle-enemy-emoji'); // Reference for enemy emoji in battle
+        const battleEnemyEmojiDisplay = document.getElementById('battle-enemy-emoji'); // Referência para o emoji do inimigo em batalha
 
         const restartButton = document.getElementById('restart-button');
         const gameOverRestartButton = document.getElementById('game-over-restart');
 
-        // Set Canvas Dimensions
+        // Definir Dimensões do Canvas
         gameCanvas.width = CANVAS_WIDTH;
         gameCanvas.height = CANVAS_HEIGHT;
 
         /**
-         * Initializes or resets the game state for a new round.
+         * Inicializa ou redefine o estado do jogo para uma nova rodada.
          */
         function initializeGame() {
-            // Reset player, enemies, diamonds, and map
-            player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH };
-            enemies = [];
-            diamonds = [];
+            console.log("[Debug] initializeGame() chamado.");
+            // Reiniciar jogador, inimigos, diamantes e mapa
+            player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH, lastMoveTime: performance.now() }; // Reset player, initialize lastMoveTime
+            enemies = []; // Reset enemies
+            diamonds = []; // Reset diamonds
             npcs = []; // Reset NPCs
-            map = [];
+            map = []; // Reset map
             currentEnemyInBattle = null;
-            lastEnemyMoveTime = 0;
-            lastPlayerMoveTime = 0;
-            gamePhase = 'playing'; // Set game phase to 'playing'
-            // Hide messages and battle screen
+            gamePhase = 'playing'; // Definir fase do jogo como 'playing'
+            
+            // Ocultar mensagens e tela de batalha
             gameMessage.classList.add('hidden');
             battleMessage.classList.add('hidden');
             battleScreen.classList.add('hidden');
             restartButton.classList.add('hidden');
 
-            // Determine number of thieves based on difficulty
+            // Determinar o número de ladrões com base na dificuldade
             if (difficulty === 'normal') {
                 numThievesToPlace = THIEF_COUNT_NORMAL;
             } else if (difficulty === 'media') {
@@ -268,141 +270,217 @@
                 numThievesToPlace = THIEF_COUNT_EXTREMEPOWER;
             }
 
-            // Generate map, place items, and reset UI/attacks
+            // Gerar mapa, colocar itens e redefinir UI/ataques
             generateMap();
             placeDiamonds();
-            placeEnemies(numThievesToPlace); // Pass the calculated number of thieves
-            placeNPCs(); // Place NPCs after map, diamonds, and enemies
+            placeEnemies(numThievesToPlace); // Passar o número calculado de ladrões
+            placeNPCs(); // Colocar NPCs após mapa, diamantes e inimigos
             resetAttackCooldowns();
             updateUI();
-            startGameLoop(); // Start the game loop
+
+            // Esconder tela de introdução e mostrar tela do jogo
+            gameIntroScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            console.log("[Debug] Tela de introdução escondida, tela do jogo mostrada.");
+
+
+            // Log de depuração para verificar o número de entidades colocadas
+            console.log(`[Debug] Jogo inicializado: Ladrões: ${enemies.length}, Diamantes: ${diamonds.length}, NPCs: ${npcs.length}`);
+
+            // Se, por algum motivo, não houver inimigos ou diamantes, avisar e talvez tentar novamente.
+            // Para evitar um "Game Over" imediato, vamos apenas avisar no console.
+            if (enemies.length === 0) {
+                console.warn("[Aviso] Não foi possível colocar ladrões suficientes. O jogo pode ser muito fácil ou terminar inesperadamente.");
+            }
+            if (diamonds.length === 0) {
+                console.warn("[Aviso] Não foi possível colocar diamantes suficientes. O jogo pode terminar em derrota rapidamente.");
+            }
+            
+            startGameLoop(); // Iniciar o loop do jogo
         }
 
         /**
-         * Generates a simple grid-based city map.
-         * Tiles are randomly assigned as road (0) or building (1).
-         * Ensures the player's starting tile is a road.
+         * Gera um mapa simples da cidade baseado em grade.
+         * Os tiles são atribuídos aleatoriamente como estrada (0) ou edifício (1).
+         * Garante que o tile inicial do jogador seja uma estrada.
          */
         function generateMap() {
             for (let y = 0; y < MAP_HEIGHT; y++) {
                 map[y] = [];
                 for (let x = 0; x < MAP_WIDTH; x++) {
-                    // 25% chance for a building tile
+                    // 25% de chance de um tile de edifício
                     if (Math.random() < 0.25) {
-                        map[y][x] = 1; // Building (non-walkable)
+                        map[y][x] = 1; // Edifício (não-caminhável)
                     } else {
-                        map[y][x] = 0; // Road (walkable)
+                        map[y][x] = 0; // Estrada (caminhável)
                     }
                 }
             }
-            // Ensure player's starting position is always a road
+            // Garantir que a posição inicial do jogador seja sempre uma estrada
             map[player.y][player.x] = 0;
         }
 
         /**
-         * Places diamonds randomly on walkable (road) tiles.
+         * Coloca diamantes aleatoriamente em tiles caminháveis (estrada).
          */
         function placeDiamonds() {
             let placed = 0;
-            while (placed < DIAMOND_COUNT) {
+            let attempts = 0;
+            const maxTotalAttempts = DIAMOND_COUNT * MAX_PLACEMENT_ATTEMPTS_PER_ENTITY;
+
+            diamonds = []; // Clear previous diamonds
+            while (placed < DIAMOND_COUNT && attempts < maxTotalAttempts) {
                 const x = Math.floor(Math.random() * MAP_WIDTH);
                 const y = Math.floor(Math.random() * MAP_HEIGHT);
-                // Place diamond if tile is a road and no diamond is already there
-                if (map[y][x] === 0 && !diamonds.some(d => d.x === x && d.y === y)) {
+                
+                // Verificar se o tile é uma estrada e nenhum diamante já estiver lá
+                const isPlayerSpot = (x === player.x && y === player.y);
+                const isDiamondSpot = diamonds.some(d => d.x === x && d.y === y);
+                // Não precisa verificar inimigos/NPCs aqui, pois eles ainda não foram colocados
+
+                if (map[y][x] === 0 && !isPlayerSpot && !isDiamondSpot) {
                     diamonds.push({ x, y });
                     placed++;
                 }
+                attempts++;
+            }
+            if (placed < DIAMOND_COUNT) {
+                console.warn(`[PlaceDiamonds] Não foi possível colocar todos os ${DIAMOND_COUNT} diamantes. Colocados: ${placed}.`);
             }
         }
 
         /**
-         * Places thieves randomly on walkable (road) tiles,
-         * ensuring they don't spawn on the player or diamonds initially.
-         * @param {number} count - The number of thieves to place.
+         * Coloca ladrões aleatoriamente em tiles caminháveis (estrada),
+         * garantindo que eles não apareçam sobre o jogador ou diamantes inicialmente.
+         * @param {number} count - O número de ladrões a serem colocados.
          */
         function placeEnemies(count) {
             let placed = 0;
-            while (placed < count) {
+            let attempts = 0;
+            const maxTotalAttempts = count * MAX_PLACEMENT_ATTEMPTS_PER_ENTITY;
+
+            let baseSpeedMultiplier;
+            if (difficulty === 'normal') {
+                baseSpeedMultiplier = ENEMY_SPEED_FACTOR_NORMAL;
+            } else if (difficulty === 'media') {
+                baseSpeedMultiplier = ENEMY_SPEED_FACTOR_MEDIA;
+            } else if (difficulty === 'extremepower') {
+                baseSpeedMultiplier = ENEMY_SPEED_FACTOR_EXTREMEPOWER;
+            }
+
+            enemies = []; // Limpar inimigos existentes para este posicionamento
+            while (placed < count && attempts < maxTotalAttempts) {
                 const x = Math.floor(Math.random() * MAP_WIDTH);
                 const y = Math.floor(Math.random() * MAP_HEIGHT);
-                // Check if the tile is a road, not player's position, not a diamond's position, and no other enemy is there
-                if (map[y][x] === 0 && !(x === player.x && y === player.y) && !diamonds.some(d => d.x === x && d.y === y) && !enemies.some(e => e.x === x && e.y === y)) {
-                    enemies.push({ x, y, health: ENEMY_MAX_HEALTH });
+                
+                // Verificar se o tile é uma estrada, não é a posição do jogador, não é a posição de um diamante e nenhum outro inimigo está lá
+                const isPlayerSpot = (x === player.x && y === player.y);
+                const isDiamondSpot = diamonds.some(d => d.x === x && d.y === y);
+                const isEnemySpot = enemies.some(e => e.x === x && e.y === y); // Verificar contra inimigos já colocados
+
+                if (map[y][x] === 0 && !isPlayerSpot && !isDiamondSpot && !isEnemySpot) {
+                    enemies.push({ 
+                        x, 
+                        y, 
+                        health: ENEMY_MAX_HEALTH,
+                        currentSpeed: ENEMY_BASE_MOVE_DELAY_MS * baseSpeedMultiplier, // Velocidade inicial baseada na dificuldade
+                        lastMoveTimestamp: performance.now(),
+                        isCarryingNpc: false // Novo: Flag para indicar se o ladrão está carregando um NPC
+                    });
                     placed++;
                 }
+                attempts++;
+            }
+            if (placed < count) {
+                console.warn(`[PlaceEnemies] Não foi possível colocar todos os ${count} ladrões. Colocados: ${placed}.`);
             }
         }
 
         /**
-         * Places NPCs randomly on walkable (road) tiles,
-         * ensuring they don't spawn on player, enemies, or diamonds.
+         * Coloca NPCs aleatoriamente em tiles caminháveis (estrada),
+         * garantindo que eles não apareçam sobre o jogador, inimigos ou diamantes.
          */
         function placeNPCs() {
-            npcs = []; // Clear existing NPCs
+            npcs = []; // Limpar NPCs existentes
+            let placed = 0;
+            let attempts = 0;
+            const maxTotalAttempts = NPC_NAMES.length * MAX_PLACEMENT_ATTEMPTS_PER_ENTITY;
+
             NPC_NAMES.forEach(name => {
-                let placed = false;
-                while (!placed) {
+                let npcPlaced = false;
+                let npcAttempts = 0;
+                while (!npcPlaced && npcAttempts < MAX_PLACEMENT_ATTEMPTS_PER_ENTITY) {
                     const x = Math.floor(Math.random() * MAP_WIDTH);
                     const y = Math.floor(Math.random() * MAP_HEIGHT);
-                    // Check if the tile is a road, not player's position, not a diamond's position, not an enemy's position, and not another NPC's position
-                    if (map[y][x] === 0 && !(x === player.x && y === player.y) &&
-                        !diamonds.some(d => d.x === x && d.y === y) &&
-                        !enemies.some(e => e.x === x && e.y === y) &&
-                        !npcs.some(n => n.x === x && n.y === y)) {
+                    
+                    // Verificar se o tile é uma estrada, não é a posição do jogador, não é a posição de um diamante, não é a posição de um inimigo e não é a posição de outro NPC
+                    const isPlayerSpot = (x === player.x && y === player.y);
+                    const isDiamondSpot = diamonds.some(d => d.x === x && d.y === y);
+                    const isEnemySpot = enemies.some(e => e.x === x && e.y === y);
+                    const isNpcSpot = npcs.some(n => n.x === x && n.y === y);
+
+                    if (map[y][x] === 0 && !isPlayerSpot && !isDiamondSpot && !isEnemySpot && !isNpcSpot) {
                         npcs.push({ x, y, name, capturedBy: null });
-                        placed = true;
+                        npcPlaced = true;
+                        placed++;
                     }
+                    npcAttempts++;
+                    attempts++;
                 }
             });
+            if (placed < NPC_NAMES.length) {
+                console.warn(`[PlaceNPCs] Não foi possível colocar todos os ${NPC_NAMES.length} NPCs. Colocados: ${placed}.`);
+            }
         }
 
 
         /**
-         * Resets all drone attack cooldowns and enables attack buttons.
+         * Redefine todos os tempos de recarga dos ataques do drone e habilita os botões de ataque.
          */
         function resetAttackCooldowns() {
             for (const key in DRONE_ATTACKS) {
                 DRONE_ATTACKS[key].currentCooldown = 0;
+                DRONE_ATTACKS[key].lastUpdateTimestamp = 0; // Reset timestamp for cooldowns
                 updateProgressBar(DRONE_ATTACKS[key]);
                 document.getElementById(DRONE_ATTACKS[key].buttonId).disabled = false;
             }
         }
 
         /**
-         * Updates the health, diamond, and enemy count displays.
+         * Atualiza as exibições de saúde, diamantes e contagem de inimigos.
          */
         function updateUI() {
             playerHealthDisplay.textContent = `HP Fábio: ${player.health}`;
             diamondsRemainingDisplay.textContent = `Diamantes Restantes: ${diamonds.length}`;
             enemiesRemainingDisplay.textContent = `Ladrões Restantes: ${enemies.length}`;
 
-            // Update enemy health display during battle
+            // Atualizar exibição de saúde do inimigo durante a batalha
             if (gamePhase === 'battle' && currentEnemyInBattle) {
                 enemyBattleInfo.textContent = `Ladrão HP: ${currentEnemyInBattle.health}`;
             }
         }
 
         /**
-         * Draws all game elements onto the canvas.
+         * Desenha todos os elementos do jogo no canvas.
          */
         function draw() {
-            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Clear the entire canvas
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Limpar todo o canvas
 
-            // Draw map tiles
+            // Desenhar tiles do mapa
             for (let y = 0; y < MAP_HEIGHT; y++) {
                 for (let x = 0; x < MAP_WIDTH; x++) {
-                    if (map[y][x] === 0) { // Road tile
-                        ctx.fillStyle = '#4a5568'; // Dark grey
-                    } else { // Building tile
-                        ctx.fillStyle = '#2d3748'; // Darker grey
+                    if (map[y][x] === 0) { // Tile de estrada
+                        ctx.fillStyle = '#4a5568'; // Cinza escuro
+                    } else { // Tile de edifício
+                        ctx.fillStyle = '#2d3748'; // Cinza mais escuro
                     }
-                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Draw the filled rectangle
-                    ctx.strokeStyle = '#2d3748'; // Grid line color
-                    ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Draw grid lines
+                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Desenhar o retângulo preenchido
+                    ctx.strokeStyle = '#2d3748'; // Cor da linha da grade
+                    ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Desenhar linhas da grade
                 }
             }
 
-            // Draw diamonds as emoji
+            // Desenhar diamantes como emoji
             ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -410,461 +488,521 @@
                 ctx.fillText('💎', d.x * TILE_SIZE + TILE_SIZE / 2, d.y * TILE_SIZE + TILE_SIZE / 2);
             });
 
-            // Draw enemies as emoji
+            // Desenhar ladrões como emoji
             enemies.forEach(e => {
                 ctx.fillText('🦹', e.x * TILE_SIZE + TILE_SIZE / 2, e.y * TILE_SIZE + TILE_SIZE / 2);
             });
 
-            // Draw NPCs as emoji and name
+            // Desenhar NPCs como emoji e nome
             npcs.forEach(npc => {
-                ctx.fillText(NPC_EMOJI, npc.x * TILE_SIZE + TILE_SIZE / 2, npc.y * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Adjust Y for emoji
+                let displayX = npc.x;
+                let displayY = npc.y;
+                let displayName = npc.name;
+
+                if (npc.capturedBy) {
+                    // Se capturado, desenhe o NPC na posição do ladrão
+                    displayX = npc.capturedBy.x;
+                    displayY = npc.capturedBy.y;
+                    // Opcional: ajustar um pouco a posição para não sobrepor completamente o ladrão,
+                    // ou mudar o emoji para indicar que está sendo arrastado/seguindo
+                    ctx.font = `${TILE_SIZE * 0.5}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`; // Menor para NPC capturado
+                    ctx.fillText('⛓️', displayX * TILE_SIZE + TILE_SIZE * 0.7, displayY * TILE_SIZE + TILE_SIZE * 0.7); // Pequena corrente ou outro indicador
+                }
+                
+                ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`; // Reset font for emoji
+                ctx.fillText(NPC_EMOJI, displayX * TILE_SIZE + TILE_SIZE / 2, displayY * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Adjust Y for emoji
+
                 ctx.font = `${TILE_SIZE * 0.3}px 'Inter', sans-serif`; // Smaller font for name
                 ctx.fillStyle = '#e2e8f0'; // Light text color
-                ctx.fillText(npc.name, npc.x * TILE_SIZE + TILE_SIZE / 2, npc.y * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Draw name below emoji
+                ctx.fillText(displayName, displayX * TILE_SIZE + TILE_SIZE / 2, displayY * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Draw name below emoji
             });
 
-            // Draw player as emoji and name
-            ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`; // Reset font for emoji
-            ctx.fillText('👮', player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Adjust Y for emoji
-            ctx.font = `${TILE_SIZE * 0.3}px 'Inter', sans-serif`; // Smaller font for name
-            ctx.fillStyle = '#e2e8f0'; // Light text color
-            ctx.fillText(PLAYER_NAME, player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Draw name below emoji
+            // Desenhar jogador como emoji e nome
+            ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`; // Redefinir fonte para emoji
+            ctx.fillText('👮', player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Ajustar Y para emoji
+            ctx.font = `${TILE_SIZE * 0.3}px 'Inter', sans-serif`; // Fonte menor para o nome
+            ctx.fillStyle = '#e2e8f0'; // Cor do texto claro
+            ctx.fillText(PLAYER_NAME, player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Desenhar nome abaixo do emoji
         }
 
         /**
-         * The main game loop. This function is called repeatedly by requestAnimationFrame.
-         * @param {DOMHighResTimeStamp} timestamp - The current time provided by requestAnimationFrame.
+         * O loop principal do jogo. Esta função é chamada repetidamente por requestAnimationFrame.
+         * @param {DOMHighResTimeStamp} timestamp - O tempo atual fornecido por requestAnimationFrame.
          */
         function gameLoop(timestamp) {
             if (gamePhase === 'playing') {
-                // Handle enemy movement based on their speed
-                if (timestamp - lastEnemyMoveTime > enemySpeed) {
-                    moveEnemies();
-                    lastEnemyMoveTime = timestamp;
-                }
+                // Lidar com o movimento dos inimigos com base em sua velocidade individual
+                enemies.forEach(enemy => {
+                    if (timestamp - enemy.lastMoveTimestamp > enemy.currentSpeed) {
+                        moveEnemy(enemy, timestamp); // Mover inimigo individualmente
+                        enemy.lastMoveTimestamp = timestamp; // Atualizar o timestamp do último movimento
+                    }
+                });
             } else if (gamePhase === 'battle') {
-                // Update cooldowns for drone attacks during battle
+                // Atualizar tempos de recarga para ataques do drone durante a batalha
                 for (const key in DRONE_ATTACKS) {
                     const attack = DRONE_ATTACKS[key];
                     if (attack.currentCooldown > 0) {
-                        // Reduce cooldown based on elapsed time
-                        attack.currentCooldown = Math.max(0, attack.currentCooldown - (timestamp - lastEnemyMoveTime));
-                        updateProgressBar(attack); // Update visual progress bar
-                        // Disable button if still on cooldown
+                        // Reduzir o tempo de recarga com base no tempo decorrido
+                        attack.currentCooldown = Math.max(0, attack.currentCooldown - (timestamp - (attack.lastUpdateTimestamp || timestamp)));
+                        attack.lastUpdateTimestamp = timestamp; // Armazenar o timestamp da última atualização
+                        updateProgressBar(attack); // Atualizar barra de progresso visual
+                        // Desabilitar botão se ainda estiver em tempo de recarga
                         document.getElementById(attack.buttonId).disabled = attack.currentCooldown > 0;
+                    } else {
+                        // Se não estiver em cooldown, garantir que o botão esteja habilitado
+                        document.getElementById(attack.buttonId).disabled = false;
                     }
                 }
             }
 
-            draw(); // Redraw all game elements
-            animationFrameId = requestAnimationFrame(gameLoop); // Request next animation frame
+            draw(); // Redesenhar todos os elementos do jogo
+            animationFrameId = requestAnimationFrame(gameLoop); // Solicitar o próximo frame de animação
         }
 
         /**
-         * Starts the main game loop, ensuring only one loop is active.
+         * Inicia o loop principal do jogo, garantindo que apenas um loop esteja ativo.
          */
         function startGameLoop() {
             if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId); // Cancel any existing loop
+                cancelAnimationFrame(animationFrameId); // Cancelar qualquer loop existente
             }
-            lastEnemyMoveTime = performance.now(); // Initialize for accurate first enemy move timing
-            lastPlayerMoveTime = performance.now(); // Initialize for accurate first player move timing
-            animationFrameId = requestAnimationFrame(gameLoop); // Start the new loop
+            // Inicializar o timestamp do último movimento para cada inimigo
+            enemies.forEach(enemy => {
+                enemy.lastMoveTimestamp = performance.now();
+            });
+            // Definir o lastMoveTime do jogador ao iniciar o jogo para evitar movimento imediato
+            player.lastMoveTime = performance.now(); 
+
+            animationFrameId = requestAnimationFrame(gameLoop); // Iniciar o novo loop
         }
 
         /**
-         * Stops the main game loop.
+         * Para o loop principal do jogo.
          */
         function stopGameLoop() {
             if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId); // Cancel the animation frame request
+                cancelAnimationFrame(animationFrameId); // Cancelar a solicitação do frame de animação
                 animationFrameId = null;
             }
         }
 
         /**
-         * Handles player movement based on keyboard arrow key input.
+         * Lida com o movimento do jogador com base na entrada das teclas de seta do teclado.
          */
         document.addEventListener('keydown', (e) => {
-            if (gamePhase !== 'playing') return; // Only allow movement in 'playing' phase
+            if (gamePhase !== 'playing') return; // Permitir movimento apenas na fase 'playing'
 
             const now = performance.now();
-            // Prevent rapid consecutive movements within the PLAYER_SPEED_MS interval
-            if (now - lastPlayerMoveTime < PLAYER_SPEED_MS) return;
+            // Evitar movimentos rápidos consecutivos dentro do intervalo PLAYER_SPEED_MS
+            if (now - player.lastMoveTime < PLAYER_SPEED_MS) return;
 
             let newX = player.x;
             let newY = player.y;
 
-            // Determine new coordinates based on arrow key pressed
+            // Determinar novas coordenadas com base na tecla de seta pressionada
             if (e.key === 'ArrowUp') newY--;
             else if (e.key === 'ArrowDown') newY++;
             else if (e.key === 'ArrowLeft') newX--;
             else if (e.key === 'ArrowRight') newX++;
-            else return; // Ignore non-movement keys
+            else return; // Ignorar teclas que não sejam de movimento
 
-            // Check if the new position is within map boundaries
+            // Verificar se a nova posição está dentro dos limites do mapa
             if (newX >= 0 && newX < MAP_WIDTH && newY >= 0 && newY < MAP_HEIGHT) {
-                // Check if the target tile is walkable (not a building)
+                // Verificar se o tile de destino é caminhável (não um edifício)
                 if (map[newY][newX] === 0) {
-                    player.x = newX; // Update player's x-coordinate
-                    player.y = newY; // Update player's y-coordinate
-                    lastPlayerMoveTime = now; // Update last move time
-                    checkEncounters(); // Check for battles after moving
-                    draw(); // Redraw the game scene immediately
+                    player.x = newX; // Atualizar coordenada x do jogador
+                    player.y = newY; // Atualizar coordenada y do jogador
+                    player.lastMoveTime = now; // Atualizar o tempo do último movimento
+                    checkEncounters(); // Verificar batalhas após o movimento
+                    draw(); // Redesenhar a cena do jogo imediatamente
                 }
             }
         });
 
         /**
-         * Checks if the player has moved onto the same tile as an enemy.
-         * If so, initiates a battle.
+         * Verifica se o jogador se moveu para o mesmo tile que um inimigo.
+         * Se sim, inicia uma batalha.
          */
         function checkEncounters() {
             for (let i = 0; i < enemies.length; i++) {
                 if (player.x === enemies[i].x && player.y === enemies[i].y) {
-                    startBattle(enemies[i]); // Start battle with the encountered enemy
-                    return; // Exit after finding the first encounter
+                    startBattle(enemies[i]); // Iniciar batalha com o inimigo encontrado
+                    return; // Sair após encontrar o primeiro encontro
                 }
             }
-            checkWinCondition(); // Check for win condition after player moves and no battle starts
+            checkWinCondition(); // Verificar condição de vitória após o jogador se mover e nenhuma batalha começar
         }
 
         /**
-         * Moves each enemy towards the nearest diamond.
-         * If no diamonds are left, enemies move randomly.
-         * Includes logic to avoid getting stuck against walls and other enemies.
+         * Move um inimigo individual em direção ao diamante mais próximo,
+         * evitando paredes e outros inimigos, e lida com a captura de NPCs.
+         * @param {object} enemy - O objeto inimigo a ser movido.
+         * @param {DOMHighResTimeStamp} timestamp - O tempo atual.
          */
-        function moveEnemies() {
-            enemies.forEach(enemy => {
-                let currentX = enemy.x;
-                let currentY = enemy.y;
-                let newX = currentX;
-                let newY = currentY;
-                let moved = false;
+        function moveEnemy(enemy, timestamp) {
+            let currentX = enemy.x;
+            let currentY = enemy.y;
+            let newX = currentX;
+            let newY = currentY;
+            let moved = false;
 
-                let targetDiamond = null;
-                if (diamonds.length > 0) {
-                    // Find the closest diamond for the current enemy
-                    let minDist = Infinity;
-                    diamonds.forEach(diamond => {
-                        const dist = Math.abs(currentX - diamond.x) + Math.abs(currentY - diamond.y);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            targetDiamond = diamond;
-                        }
-                    });
-                }
-
-                // Define possible movement directions (dx, dy)
-                const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // Down, Up, Right, Left
-
-                let validMoves = [];
-
-                // Evaluate each possible direction
-                for (let dir of directions) {
-                    const testX = currentX + dir[0];
-                    const testY = currentY + dir[1];
-
-                    // Check if the potential new position is within map bounds and is a walkable tile (road)
-                    if (testX >= 0 && testX < MAP_WIDTH && testY >= 0 && testY < MAP_HEIGHT &&
-                        map[testY][testX] === 0) {
-                        // Check if the potential position is not occupied by the player
-                        if (!(testX === player.x && testY === player.y)) {
-                            // Check if the potential position is not occupied by another enemy (excluding self)
-                            let isOccupiedByOtherEnemy = false;
-                            for (let otherEnemy of enemies) {
-                                if (otherEnemy !== enemy && otherEnemy.x === testX && otherEnemy.y === testY) {
-                                    isOccupiedByOtherEnemy = true;
-                                    break;
-                                }
-                            }
-                            if (!isOccupiedByOtherEnemy) {
-                                // This is a valid and unblocked move
-                                validMoves.push({ x: testX, y: testY, dirX: dir[0], dirY: dir[1] });
-                            }
-                        }
-                    }
-                }
-
-                // Sort valid moves based on desirability
-                if (validMoves.length > 0) {
-                    if (targetDiamond) {
-                        // Sort by Manhattan distance to the target diamond (ascending)
-                        validMoves.sort((a, b) => {
-                            const distA = Math.abs(a.x - targetDiamond.x) + Math.abs(a.y - targetDiamond.y);
-                            const distB = Math.abs(b.x - targetDiamond.x) + Math.abs(b.y - targetDiamond.y);
-                            return distA - distB;
-                        });
-
-                        // Filter for moves that achieve the minimum distance
-                        const minDistance = Math.abs(validMoves[0].x - targetDiamond.x) + Math.abs(validMoves[0].y - targetDiamond.y);
-                        const bestMoves = validMoves.filter(move => {
-                            return (Math.abs(move.x - targetDiamond.x) + Math.abs(move.y - targetDiamond.y)) === minDistance;
-                        });
-
-                        // Randomly pick one of the best moves to introduce variety
-                        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
-                        newX = chosenMove.x;
-                        newY = chosenMove.y;
-                        moved = true;
-                    } else {
-                        // If no diamonds left, pick a random valid move to keep moving
-                        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-                        newX = randomMove.x;
-                        newY = randomMove.y;
-                        moved = true;
-                    }
-                }
-
-                if (moved) {
-                    enemy.x = newX;
-                    enemy.y = newY;
-                    checkDiamondCollection(enemy);
-
-                    // Check for NPC capture after enemy moves
-                    const capturedNpc = npcs.find(npc => npc.x === enemy.x && npc.y === enemy.y && !npc.capturedBy);
-                    if (capturedNpc) {
-                        capturedNpc.capturedBy = enemy; // Assign the thief as captor
-                        showMessage(`${capturedNpc.name} foi capturado por um ladrão!`, 'danger');
-                    }
-                }
-
-                // Update positions of already captured NPCs
-                npcs.forEach(npc => {
-                    if (npc.capturedBy === enemy) { // If this enemy captured this NPC
-                        npc.x = enemy.x;
-                        npc.y = enemy.y;
+            let targetDiamond = null;
+            if (diamonds.length > 0) {
+                // Encontrar o diamante mais próximo para o inimigo atual
+                let minDist = Infinity;
+                diamonds.forEach(diamond => {
+                    const dist = Math.abs(currentX - diamond.x) + Math.abs(currentY - diamond.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        targetDiamond = diamond;
                     }
                 });
+            }
+
+            // Definir direções de movimento possíveis (dx, dy)
+            const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // Baixo, Cima, Direita, Esquerda
+
+            let validMoves = [];
+
+            // Avaliar cada direção possível
+            for (let dir of directions) {
+                const testX = currentX + dir[0];
+                const testY = currentY + dir[1];
+
+                // Verificar se a potencial nova posição está dentro dos limites do mapa e é um tile caminhável (estrada)
+                if (testX >= 0 && testX < MAP_WIDTH && testY >= 0 && testY < MAP_HEIGHT &&
+                    map[testY][testX] === 0) {
+                    // Verificar se a posição potencial não está ocupada pelo jogador
+                    if (!(testX === player.x && testY === player.y)) {
+                        let isBlockedByAnotherThief = false;
+                        for (let otherEnemy of enemies) {
+                            if (otherEnemy !== enemy && otherEnemy.x === testX && otherEnemy.y === testY) {
+                                isBlockedByAnotherThief = true;
+                                break;
+                            }
+                        }
+                        
+                        // Não precisamos mais verificar NPCs livres aqui, pois queremos que o ladrão
+                        // possa se mover sobre eles para capturá-los.
+                        
+                        if (!isBlockedByAnotherThief) {
+                            // Este é um movimento válido, pois não está bloqueado por jogador ou outro ladrão.
+                            validMoves.push({ x: testX, y: testY, dirX: dir[0], dirY: dir[1] });
+                        }
+                    }
+                }
+            }
+
+            // Classificar movimentos válidos com base na desejabilidade
+            if (validMoves.length > 0) {
+                if (targetDiamond) {
+                    // Classificar pela distância de Manhattan para o diamante alvo (crescente)
+                    validMoves.sort((a, b) => {
+                        const distA = Math.abs(a.x - targetDiamond.x) + Math.abs(a.y - targetDiamond.y);
+                        const distB = Math.abs(b.x - targetDiamond.x) + Math.abs(b.y - targetDiamond.y);
+                        return distA - distB;
+                    });
+
+                    // Filtrar para movimentos que atingem a distância mínima
+                    const minDistance = Math.abs(validMoves[0].x - targetDiamond.x) + Math.abs(validMoves[0].y - targetDiamond.y);
+                    const bestMoves = validMoves.filter(move => {
+                        return (Math.abs(move.x - targetDiamond.x) + Math.abs(move.y - targetDiamond.y)) === minDistance;
+                    });
+
+                    // Escolher aleatoriamente um dos melhores movimentos para introduzir variedade
+                    const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                    newX = chosenMove.x;
+                    newY = chosenMove.y;
+                    moved = true;
+                } else {
+                    // Se não houver diamantes restantes, escolher um movimento aleatório válido para continuar se movendo
+                    const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                    newX = randomMove.x;
+                    newY = randomMove.y;
+                    moved = true;
+                }
+            }
+
+            if (moved) {
+                enemy.x = newX;
+                enemy.y = newY;
+                checkDiamondCollection(enemy); // Verificar coleta de diamantes
+
+                // Verificar captura de NPC após o movimento do inimigo
+                const capturedNpc = npcs.find(npc => npc.x === enemy.x && npc.y === enemy.y && !npc.capturedBy);
+                if (capturedNpc) {
+                    capturedNpc.capturedBy = enemy; // Atribuir o ladrão como captor
+                    enemy.isCarryingNpc = true; // Marcar o ladrão como carregando um NPC
+                    
+                    // Definir a nova velocidade do ladrão capturador
+                    let baseSpeedMultiplier;
+                    if (difficulty === 'normal') {
+                        baseSpeedMultiplier = ENEMY_SPEED_FACTOR_NORMAL;
+                    } else if (difficulty === 'media') {
+                        baseSpeedMultiplier = ENEMY_SPEED_FACTOR_MEDIA;
+                    } else if (difficulty === 'extremepower') {
+                        baseSpeedMultiplier = ENEMY_SPEED_FACTOR_EXTREMEPOWER;
+                    }
+                    enemy.currentSpeed = ENEMY_BASE_MOVE_DELAY_MS * baseSpeedMultiplier * ENEMY_CAPTURED_SPEED_MULTIPLIER;
+                    
+                    showMessage(`${capturedNpc.name} foi capturado por um ladrão e ele ficou MAIS RÁPIDO!`, 'danger');
+                }
+            }
+
+            // Atualizar posições dos NPCs já capturados
+            npcs.forEach(npc => {
+                if (npc.capturedBy === enemy) { // Se este inimigo capturou este NPC
+                    npc.x = enemy.x;
+                    npc.y = enemy.y;
+                }
             });
         }
 
+
         /**
-         * Checks if an enemy has moved onto a diamond's position.
-         * If so, the diamond is "collected" (removed from the game).
-         * @param {object} enemy - The enemy object that just moved.
+         * Verifica se um inimigo se moveu para a posição de um diamante.
+         * Se sim, o diamante é "coletado" (removido do jogo).
+         * @param {object} enemy - O objeto inimigo que acabou de se mover.
          */
         function checkDiamondCollection(enemy) {
             const diamondIndex = diamonds.findIndex(d => d.x === enemy.x && d.y === enemy.y);
             if (diamondIndex !== -1) {
-                diamonds.splice(diamondIndex, 1); // Remove the collected diamond
-                updateUI(); // Update UI to reflect fewer diamonds
-                showMessage(`Um ladrão pegou um diamante!`, 'danger'); // Notify player
-                checkLoseCondition(); // Check if all diamonds are gone (lose condition)
+                diamonds.splice(diamondIndex, 1); // Remover o diamante coletado
+                updateUI(); // Atualizar UI para refletir menos diamantes
+                showMessage(`Um ladrão pegou um diamante!`, 'danger'); // Notificar o jogador
+                checkLoseCondition(); // Verificar se todos os diamantes se foram (condição de derrota)
             }
         }
 
         /**
-         * Transitions the game into battle mode.
-         * @param {object} enemy - The enemy object that Fábio Agent is battling.
+         * Transiciona o jogo para o modo de batalha.
+         * @param {object} enemy - O objeto inimigo com o qual Fábio Agent está lutando.
          */
         function startBattle(enemy) {
-            gamePhase = 'battle'; // Change game phase to battle
-            currentEnemyInBattle = enemy; // Set the current enemy being battled
-            battleScreen.classList.remove('hidden'); // Show the battle UI
-            gameCanvas.classList.add('hidden'); // Hide the map canvas during battle
-            showMessage(`Ladrão encontrado! Preparar para a batalha!`, 'info'); // Display battle start message
-            updateUI(); // Update UI to show enemy health
-            resetAttackCooldowns(); // Reset drone attack cooldowns for the battle
+            gamePhase = 'battle'; // Mudar a fase do jogo para batalha
+            currentEnemyInBattle = enemy; // Definir o inimigo atual em batalha
+            battleScreen.classList.remove('hidden'); // Mostrar a UI de batalha
+            gameCanvas.classList.add('hidden'); // Ocultar o canvas do mapa durante a batalha
+            showMessage(`Ladrão encontrado! Preparar para a batalha!`, 'info'); // Exibir mensagem de início de batalha
+            updateUI(); // Atualizar UI para mostrar a saúde do inimigo
+            resetAttackCooldowns(); // Redefinir tempos de recarga dos ataques do drone para a batalha
         }
 
         /**
-         * Ends the current battle and returns the game to map mode.
+         * Termina a batalha atual e retorna o jogo para o modo de mapa.
          */
         function endBattle() {
-            gamePhase = 'playing'; // Change game phase back to playing
-            currentEnemyInBattle = null; // Clear the current enemy in battle
-            battleScreen.classList.add('hidden'); // Hide the battle UI
-            gameCanvas.classList.remove('hidden'); // Show the map canvas
-            showMessage(`Batalha vencida!`, 'success'); // Display battle won message
-            checkWinCondition(); // Check if all enemies are defeated (win condition)
-            draw(); // Redraw the map to reflect changes (e.g., removed enemy)
+            gamePhase = 'playing'; // Mudar a fase do jogo de volta para 'playing'
+            currentEnemyInBattle = null; // Limpar o inimigo atual em batalha
+            battleScreen.classList.add('hidden'); // Ocultar a UI de batalha
+            gameCanvas.classList.remove('hidden'); // Mostrar o canvas do mapa
+            showMessage(`Batalha vencida!`, 'success'); // Exibir mensagem de batalha vencida
+            checkWinCondition(); // Verificar se todos os inimigos foram derrotados (condição de vitória)
+            draw(); // Redesenhar o mapa para refletir as mudanças (ex: inimigo removido)
         }
 
         /**
-         * Executes a drone attack during battle.
-         * @param {object} attack - The drone attack object (e.g., DRONE_ATTACKS.vrombulha).
+         * Executa um ataque de drone durante a batalha.
+         * @param {object} attack - O objeto de ataque do drone (ex: DRONE_ATTACKS.vrombulha).
          */
         function performAttack(attack) {
-            // Prevent attack if not in battle, no enemy, or attack is on cooldown
+            // Prevenir ataque se não estiver em batalha, sem inimigo ou ataque estiver em tempo de recarga
             if (gamePhase !== 'battle' || !currentEnemyInBattle || attack.currentCooldown > 0) return;
 
-            // Apply damage to the current enemy
+            // Aplicar dano ao inimigo atual
             currentEnemyInBattle.health -= attack.damage;
             showMessage(`Seu drone usou ${attack.name} e causou ${attack.damage} de dano!`, 'success');
-            updateUI(); // Update enemy health display
+            updateUI(); // Atualizar exibição de saúde do inimigo
 
-            // Set the cooldown for the used attack
+            // Definir o tempo de recarga para o ataque usado
             attack.currentCooldown = attack.cooldown;
-            updateProgressBar(attack); // Update visual progress bar
-            document.getElementById(attack.buttonId).disabled = true; // Disable button during cooldown
+            attack.lastUpdateTimestamp = performance.now(); // Gravar o timestamp de início do cooldown
+            updateProgressBar(attack); // Atualizar barra de progresso visual
+            document.getElementById(attack.buttonId).disabled = true; // Desabilitar botão durante o tempo de recarga
 
-            // Check if the enemy is defeated
+            // Verificar se o inimigo foi derrotado
             if (currentEnemyInBattle.health <= 0) {
                 showMessage(`Ladrão eliminado!`, 'success');
 
-                // Release any captured NPC
+                // Liberar qualquer NPC capturado e resetar a velocidade do ladrão
                 npcs.forEach(npc => {
                     if (npc.capturedBy === currentEnemyInBattle) {
-                        npc.capturedBy = null; // Release the NPC
-                        // Find a new safe spot for the rescued NPC
+                        npc.capturedBy = null; // Liberar o NPC
+                        // Restaurar a velocidade do ladrão (se ele ainda existisse e fosse um caso de múltiplos NPCs)
+                        currentEnemyInBattle.isCarryingNpc = false;
+                        
+                        let baseSpeedMultiplier;
+                        if (difficulty === 'normal') {
+                            baseSpeedMultiplier = ENEMY_SPEED_FACTOR_NORMAL;
+                        } else if (difficulty === 'media') {
+                            baseSpeedMultiplier = ENEMY_SPEED_FACTOR_MEDIA;
+                        } else if (difficulty === 'extremepower') {
+                            baseSpeedMultiplier = ENEMY_SPEED_FACTOR_EXTREMEPOWER;
+                        }
+                        currentEnemyInBattle.currentSpeed = ENEMY_BASE_MOVE_DELAY_MS * baseSpeedMultiplier;
+
+                        // Encontrar um novo local seguro para o NPC resgatado
                         let newNpcX, newNpcY;
                         let placedNpc = false;
-                        while (!placedNpc) {
+                        let npcAttempts = 0;
+                        const maxNpcAttempts = 100; // Tentativas para colocar NPC
+
+                        while (!placedNpc && npcAttempts < maxNpcAttempts) {
                             newNpcX = Math.floor(Math.random() * MAP_WIDTH);
                             newNpcY = Math.floor(Math.random() * MAP_HEIGHT);
-                            // Check if the tile is a road, not player's position, not a diamond's position, and not occupied by any enemy or other NPC
+                            // Verificar se o tile é uma estrada, não é a posição do jogador, não é a posição de um diamante e não está ocupado por nenhum inimigo ou outro NPC
                             if (map[newNpcY][newNpcX] === 0 && !(newNpcX === player.x && newNpcY === player.y) &&
                                 !diamonds.some(d => d.x === newNpcX && d.y === newNpcY) &&
-                                !enemies.some(e => e.x === newNpcX && e.y === newNpcY) &&
-                                !npcs.some(n => n !== npc && n.x === newNpcX && n.y === newNpcY)) {
+                                !enemies.some(e => e.x === newNpcX && e.y === newNpcY) && // Verifica contra inimigos remanescentes
+                                !npcs.some(n => n !== npc && n.x === newNpcX && n.y === newNpcY)) { // Verifica contra outros NPCs
                                 npc.x = newNpcX;
                                 npc.y = newNpcY;
                                 placedNpc = true;
                             }
+                            npcAttempts++;
+                        }
+                        if (!placedNpc) {
+                            console.warn(`[Resgate NPC] Não foi possível encontrar um local seguro para ${npc.name}.`);
                         }
                         showMessage(`${npc.name} foi salvo!`, 'info');
                     }
                 });
 
-                // Remove the defeated enemy from the enemies array
+                // Remover o inimigo derrotado do array de inimigos
                 enemies = enemies.filter(e => e !== currentEnemyInBattle);
-                setTimeout(endBattle, 1500); // Wait a bit for message then end battle
+                setTimeout(endBattle, 1500); // Esperar um pouco pela mensagem e depois terminar a batalha
             } else {
-                // If enemy is not defeated, they retaliate (simple: deal 1 damage to player)
+                // Se o inimigo não for derrotado, ele revida (simples: causa 1 de dano ao jogador)
                 player.health -= 1;
                 showMessage(`O ladrão contra-atacou! Fábio perdeu 1 HP.`, 'danger');
-                updateUI(); // Update player health display
-                checkLoseCondition(); // Check if player is defeated (lose condition)
+                updateUI(); // Atualizar exibição de saúde do jogador
+                checkLoseCondition(); // Verificar se o jogador foi derrotado (condição de derrota)
             }
         }
 
         /**
-         * Updates the visual progress bar for an attack's cooldown.
-         * @param {object} attack - The attack object with `cooldown`, `currentCooldown`, and `pbId`.
+         * Atualiza a barra de progresso visual para o tempo de recarga de um ataque.
+         * @param {object} attack - O objeto de ataque com `cooldown`, `currentCooldown` e `pbId`.
          */
         function updateProgressBar(attack) {
             const progressBar = document.getElementById(attack.pbId);
             if (progressBar) {
-                // Calculate progress as a percentage
+                // Calcular o progresso como uma porcentagem
                 const progress = ((attack.cooldown - attack.currentCooldown) / attack.cooldown) * 100;
-                progressBar.style.width = `${progress}%`; // Set width of the progress bar
+                progressBar.style.width = `${progress}%`; // Definir a largura da barra de progresso
             }
         }
 
         /**
-         * Checks if the player has won the game (all thieves eliminated).
-         * If won, transitions to the game over screen with a victory message.
+         * Verifica se o jogador venceu o jogo (todos os ladrões eliminados).
+         * Se venceu, transiciona para a tela de fim de jogo com uma mensagem de vitória.
          */
         function checkWinCondition() {
             if (enemies.length === 0) {
-                stopGameLoop(); // Stop the game loop
-                gamePhase = 'gameOver'; // Set game phase to game over
-                gameScreen.classList.add('hidden'); // Hide the main game screen
-                gameOverScreen.classList.remove('hidden'); // Show the game over screen
-                gameOverTitle.textContent = 'VITÓRIA!'; // Set victory title
-                gameOverTitle.classList.remove('text-red-500'); // Remove red color
-                gameOverTitle.classList.add('text-green-500'); // Add green color
-                gameOverMessage.textContent = 'Todos os ladrões foram eliminados! A cidade está segura!'; // Set victory message
-                restartButton.classList.remove('hidden'); // Show restart button on main screen too (for convenience)
+                stopGameLoop(); // Parar o loop do jogo
+                gamePhase = 'gameOver'; // Definir a fase do jogo como 'gameOver'
+                gameScreen.classList.add('hidden'); // Ocultar a tela principal do jogo
+                gameOverScreen.classList.remove('hidden'); // Mostrar a tela de fim de jogo
+                gameOverTitle.textContent = 'VITÓRIA!'; // Definir título de vitória
+                gameOverTitle.classList.remove('text-red-500'); // Remover cor vermelha
+                gameOverTitle.classList.add('text-green-500'); // Adicionar cor verde
+                gameOverMessage.textContent = 'Todos os ladrões foram eliminados! A cidade está segura!'; // Definir mensagem de vitória
+                restartButton.classList.remove('hidden'); // Mostrar botão de reiniciar também na tela principal (para conveniência)
             }
         }
 
         /**
-         * Checks if the player has lost the game (all diamonds collected or player health is zero).
-         * If lost, transitions to the game over screen with a defeat message.
+         * Verifica se o jogador perdeu o jogo (todos os diamantes coletados ou saúde do jogador é zero).
+         * Se perdeu, transiciona para a tela de fim de jogo com uma mensagem de derrota.
          */
         function checkLoseCondition() {
             if (diamonds.length === 0 || player.health <= 0) {
-                stopGameLoop(); // Stop the game loop
-                gamePhase = 'gameOver'; // Set game phase to game over
-                gameScreen.classList.add('hidden'); // Hide the main game screen
-                gameOverScreen.classList.remove('hidden'); // Show the game over screen
-                gameOverTitle.textContent = 'GAME OVER!'; // Set game over title
-                gameOverTitle.classList.remove('text-green-500'); // Remove green color
-                gameOverTitle.classList.add('text-red-500'); // Add red color
-                // Set specific loss message based on cause
+                stopGameLoop(); // Parar o loop do jogo
+                gamePhase = 'gameOver'; // Definir a fase do jogo como 'gameOver'
+                gameScreen.classList.add('hidden'); // Ocultar a tela principal do jogo
+                gameOverScreen.classList.remove('hidden'); // Mostrar a tela de fim de jogo
+                gameOverTitle.textContent = 'GAME OVER!'; // Definir título de fim de jogo
+                gameOverTitle.classList.remove('text-green-500'); // Remover cor verde
+                gameOverTitle.classList.add('text-red-500'); // Adicionar cor vermelha
+                // Definir mensagem de derrota específica com base na causa
                 if (diamonds.length === 0) {
                     gameOverMessage.textContent = 'Os ladrões levaram todos os diamantes!';
                 } else {
                     gameOverMessage.textContent = 'Fábio Agent foi derrotado!';
                 }
-                restartButton.classList.remove('hidden'); // Show restart button
+                restartButton.classList.remove('hidden'); // Mostrar botão de reiniciar
             }
         }
 
         /**
-         * Displays a temporary message box on the screen.
-         * @param {string} message - The text content of the message.
-         * @param {string} type - The type of message ('info', 'success', 'danger') for styling.
+         * Exibe uma caixa de mensagem temporária na tela.
+         * @param {string} message - O conteúdo do texto da mensagem.
+         * @param {string} type - O tipo de mensagem ('info', 'success', 'danger') para estilização.
          */
         function showMessage(message, type) {
-            // Determine which message element to use (battle or general game message)
+            // Determinar qual elemento de mensagem usar (batalha ou mensagem geral do jogo)
             const targetMessageElement = gamePhase === 'battle' ? battleMessage : gameMessage;
-            targetMessageElement.textContent = message; // Set message text
-            // Remove previous type classes and show the message box
+            targetMessageElement.textContent = message; // Definir texto da mensagem
+            // Remover classes de tipo anteriores e mostrar a caixa de mensagem
             targetMessageElement.classList.remove('hidden', 'bg-blue-600', 'bg-green-600', 'bg-red-600');
-            // Add appropriate background color based on message type
+            // Adicionar cor de fundo apropriada com base no tipo de mensagem
             if (type === 'info') targetMessageElement.classList.add('bg-blue-600');
             else if (type === 'success') targetMessageElement.classList.add('bg-green-600');
             else if (type === 'danger') targetMessageElement.classList.add('bg-red-600');
-            else targetMessageElement.classList.add('bg-gray-600'); // Default grey
+            else targetMessageElement.classList.add('bg-gray-600'); // Cinza padrão
 
-            // Hide the message after a delay
+            // Ocultar a mensagem após um atraso
             setTimeout(() => {
                 targetMessageElement.classList.add('hidden');
-            }, 3000); // Message disappears after 3 seconds
+            }, 3000); // A mensagem desaparece após 3 segundos
         }
 
         // --- Event Listeners ---
 
-        // Event Listeners for Difficulty Selection Buttons
+        // Event Listeners para botões de Seleção de Dificuldade
         document.getElementById('difficulty-normal').addEventListener('click', () => {
-            difficulty = 'normal'; // Set difficulty
-            enemySpeed = ENEMY_NORMAL_SPEED_MS; // Set corresponding enemy speed
-            gameIntroScreen.classList.add('hidden'); // Hide intro screen
-            gameScreen.classList.remove('hidden'); // Show main game screen
-            initializeGame(); // Start the game
+            console.log("[Debug] Botão NORMAL clicado.");
+            difficulty = 'normal'; // Definir dificuldade
+            initializeGame(); // Iniciar o jogo
         });
         document.getElementById('difficulty-media').addEventListener('click', () => {
+            console.log("[Debug] Botão MÉDIA clicado.");
             difficulty = 'media';
-            enemySpeed = ENEMY_MEDIA_SPEED_MS;
-            gameIntroScreen.classList.add('hidden');
-            gameScreen.classList.remove('hidden');
             initializeGame();
         });
         document.getElementById('difficulty-extremepower').addEventListener('click', () => {
+            console.log("[Debug] Botão EXTREMEPOWER clicado.");
             difficulty = 'extremepower';
-            enemySpeed = ENEMY_EXTREMEPOWER_SPEED_MS;
-            gameIntroScreen.classList.add('hidden');
-            gameScreen.classList.remove('hidden');
             initializeGame();
         });
 
-        // Event Listeners for Drone Attack Buttons in Battle
+        // Event Listeners para botões de Ataque do Drone em Batalha
         document.getElementById(DRONE_ATTACKS.vrombulha.buttonId).addEventListener('click', () => performAttack(DRONE_ATTACKS.vrombulha));
         document.getElementById(DRONE_ATTACKS.oinikmask.buttonId).addEventListener('click', () => performAttack(DRONE_ATTACKS.oinikmask));
         document.getElementById(DRONE_ATTACKS.niuciiii.buttonId).addEventListener('click', () => performAttack(DRONE_ATTACKS.niuciiii));
 
-        // Restart buttons from main game screen and game over screen
+        // Botões de reiniciar da tela principal do jogo e da tela de fim de jogo
         restartButton.addEventListener('click', () => {
-            gameScreen.classList.add('hidden'); // Hide game screen
-            gameIntroScreen.classList.remove('hidden'); // Show intro screen
-            stopGameLoop(); // Stop the game loop
+            console.log("[Debug] Botão Reiniciar Jogo clicado.");
+            gameScreen.classList.add('hidden'); // Ocultar tela do jogo
+            gameIntroScreen.classList.remove('hidden'); // Mostrar tela de introdução
+            stopGameLoop(); // Parar o loop do jogo
         });
         gameOverRestartButton.addEventListener('click', () => {
-            gameOverScreen.classList.add('hidden'); // Hide game over screen
-            gameIntroScreen.classList.remove('hidden'); // Show intro screen
-            stopGameLoop(); // Stop the game loop
+            console.log("[Debug] Botão Jogar Novamente clicado na tela Game Over.");
+            gameOverScreen.classList.add('hidden'); // Ocultar tela de fim de jogo
+            gameIntroScreen.classList.remove('hidden'); // Mostrar tela de introdução
+            stopGameLoop(); // Parar o loop do jogo
         });
 
-        // Initial setup for progress bars (to show them empty)
+        // Configuração inicial para barras de progresso (para mostrá-las vazias)
         for (const key in DRONE_ATTACKS) {
             updateProgressBar(DRONE_ATTACKS[key]);
         }
 
-        // The game starts by displaying the introduction screen.
-        // The user must select a difficulty to begin playing.
+        // O jogo começa exibindo a tela de introdução.
+        // O usuário deve selecionar uma dificuldade para começar a jogar.
     </script>
 </body>
 </html>
