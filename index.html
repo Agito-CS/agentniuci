@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Fábio: O Tira da Gurizada</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for "Inter" -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base styles for the body and game container */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: #e2e8f0; /* Light text color */
+        }
+        /* Canvas styling */
+        canvas {
+            border: 2px solid #4a5568; /* Border for the game area */
+            background-color: #2d3748; /* Background inside canvas */
+            border-radius: 0.5rem; /* Rounded corners for canvas */
+            display: block; /* Ensures canvas takes full width */
+            margin: 0 auto; /* Centers the canvas horizontally */
+        }
+        /* Styling for the main game container (intro, game screen, game over) */
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem; /* Space between elements */
+            align-items: center;
+            padding: 1.5rem;
+            background-color: #2d3748; /* Container background */
+            border-radius: 0.75rem; /* Rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Soft shadow */
+        }
+        /* General button styling */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s; /* Smooth transition for hover effects */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        /* Primary button color (e.g., difficulty selection) */
+        .btn-primary {
+            background-color: #667eea; /* Indigo */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #5a67d8; /* Darker indigo on hover */
+            transform: translateY(-2px); /* Slight lift effect */
+        }
+        /* Danger button color (e.g., restart) */
+        .btn-danger {
+            background-color: #f56565; /* Red */
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #e53e3e; /* Darker red on hover */
+            transform: translateY(-2px); /* Slight lift effect */
+        }
+        /* Attack button styling */
+        .attack-button {
+            background-color: #48bb78; /* Green */
+            color: white;
+            display: flex; /* Use flexbox for button content */
+            flex-direction: column; /* Stack text and progress bar */
+            align-items: center;
+            justify-content: center;
+        }
+        .attack-button:hover:not(:disabled) {
+            background-color: #38a169; /* Darker green on hover */
+        }
+        .attack-button:disabled {
+            background-color: #a0aec0; /* Grey when disabled */
+            cursor: not-allowed; /* No-go cursor */
+        }
+        /* Styling for in-game messages */
+        .message-box {
+            background-color: #4a5568; /* Dark grey background */
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            margin-top: 1rem;
+        }
+        /* Progress bar container for attack cooldowns */
+        .progress-bar-container {
+            width: 90%; /* Occupy most of the button width */
+            background-color: #4a5568; /* Dark grey background */
+            border-radius: 0.25rem;
+            overflow: hidden; /* Hide overflow from the bar */
+            height: 1rem;
+            margin-top: 0.5rem;
+        }
+        /* Actual progress bar */
+        .progress-bar {
+            height: 100%;
+            background-color: #48bb78; /* Green progress color */
+            width: 0%; /* Starts at 0% width */
+            transition: width 0.1s linear; /* Smooth transition for progress updates */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Game Introduction Screen -->
+    <div id="game-intro" class="game-container max-w-lg w-full text-center p-8 rounded-xl shadow-lg transition-all duration-300 ease-in-out">
+        <h1 class="text-5xl font-extrabold mb-6 text-indigo-400">AGENT FÁBIO</h1>
+        <p class="text-3xl font-semibold mb-8 text-gray-300">um tira da gurizada</p>
+        <div class="space-y-4">
+            <button id="difficulty-normal" class="btn btn-primary w-full text-2xl py-3">NORMAL</button>
+            <button id="difficulty-media" class="btn btn-primary w-full text-2xl py-3">MÉDIA</button>
+            <button id="difficulty-extremepower" class="btn btn-primary w-full text-2xl py-3">EXTREMEPOWER</button>
+        </div>
+    </div>
+
+    <!-- Main Game Screen -->
+    <div id="game-screen" class="game-container hidden max-w-4xl w-full p-6 rounded-xl transition-all duration-300 ease-in-out">
+        <h2 class="text-3xl font-bold mb-4 text-indigo-400">Cidade Segura</h2>
+        <div class="flex justify-between w-full mb-4 text-lg">
+            <div id="player-health">HP Fábio: 100</div>
+            <div id="diamonds-remaining">Diamantes Restantes: 10</div>
+            <div id="enemies-remaining">Ladrões Restantes: 5</div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="600" class="rounded-lg shadow-inner"></canvas>
+
+        <!-- Battle Screen (hidden by default) -->
+        <div id="battle-screen" class="hidden w-full text-center p-4">
+            <h3 class="text-2xl font-bold mb-4 text-red-400">Batalha!</h3>
+            <div id="enemy-battle-info" class="mb-4 text-xl">Ladrão HP: 10</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                <!-- Drone Attack Buttons -->
+                <button id="attack-vrombulha" class="btn attack-button text-xl py-3">
+                    Vrombulha (1 DMG, 1s)
+                    <div class="progress-bar-container"><div id="pb-vrombulha" class="progress-bar"></div></div>
+                </button>
+                <button id="attack-oinikmask" class="btn attack-button text-xl py-3">
+                    Oinikmask (3 DMG, 3s)
+                    <div class="progress-bar-container"><div id="pb-oinikmask" class="progress-bar"></div></div>
+                </button>
+                <button id="attack-niuciiii" class="btn attack-button text-xl py-3">
+                    Niuciiii (15 DMG, 10s)
+                    <div class="progress-bar-container"><div id="pb-niuciiii" class="progress-bar"></div></div>
+                </button>
+            </div>
+            <div id="battle-message" class="message-box mt-4 text-lg hidden"></div>
+        </div>
+        <div id="game-message" class="message-box mt-4 text-lg hidden"></div>
+        <button id="restart-button" class="btn btn-danger mt-6 hidden">Reiniciar Jogo</button>
+    </div>
+
+    <!-- Game Over / Win Screen -->
+    <div id="game-over-screen" class="game-container hidden max-w-md w-full text-center p-8 rounded-xl shadow-lg">
+        <h1 id="game-over-title" class="text-5xl font-extrabold mb-6 text-red-500">GAME OVER!</h1>
+        <p id="game-over-message" class="text-2xl mb-8 text-gray-300">Os ladrões levaram todos os diamantes!</p>
+        <button id="game-over-restart" class="btn btn-danger w-full text-xl py-3">Jogar Novamente</button>
+    </div>
+
+    <script>
+        // Game Constants
+        const TILE_SIZE = 40; // Size of each tile in pixels
+        const MAP_WIDTH = 20; // Map width in tiles
+        const MAP_HEIGHT = 15; // Map height in tiles
+        const CANVAS_WIDTH = MAP_WIDTH * TILE_SIZE;
+        const CANVAS_HEIGHT = MAP_HEIGHT * TILE_SIZE;
+
+        const PLAYER_SPEED_MS = 150; // Milliseconds delay between player movements
+        const ENEMY_NORMAL_SPEED_MS = 300; // Thief movement speed on Normal difficulty
+        const ENEMY_MEDIA_SPEED_MS = 150; // Thief movement speed on Media difficulty
+        const ENEMY_EXTREMEPOWER_SPEED_MS = 30; // Thief movement speed on Extremepower difficulty (10x faster)
+
+        const DIAMOND_COUNT = 50; // Total number of diamonds in the game (5x more)
+        const THIEF_COUNT_NORMAL = 5; // Base number of thieves for Normal difficulty
+        const THIEF_COUNT_MEDIA = THIEF_COUNT_NORMAL * 2; // Double thieves for Media difficulty
+        const THIEF_COUNT_EXTREMEPOWER = THIEF_COUNT_NORMAL * 4; // Quadruple thieves for Extremepower difficulty
+
+        // Player & Drone Attack Statistics
+        const PLAYER_MAX_HEALTH = 100;
+        const DRONE_ATTACKS = {
+            vrombulha: { name: 'Vrombulha', damage: 1, cooldown: 1000, currentCooldown: 0, buttonId: 'attack-vrombulha', pbId: 'pb-vrombulha' },
+            oinikmask: { name: 'Oinikmask', damage: 3, cooldown: 3000, currentCooldown: 0, buttonId: 'attack-oinikmask', pbId: 'pb-oinikmask' },
+            niuciiii: { name: 'Niuciiii', damage: 15, cooldown: 10000, currentCooldown: 0, buttonId: 'attack-niuciiii', pbId: 'pb-niuciiii' },
+        };
+        const ENEMY_MAX_HEALTH = 10; // Health of each thief
+
+        // Game State Variables
+        let gamePhase = 'intro'; // Current phase: 'intro', 'playing', 'battle', 'gameOver'
+        let player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH }; // Player's position and health
+        let enemies = []; // Array to store thief objects {x, y, health}
+        let diamonds = []; // Array to store diamond objects {x, y}
+        let map = []; // 2D array representing the city map (0 = Road, 1 = Building)
+        let difficulty = 'normal'; // Current difficulty setting
+        let enemySpeed = ENEMY_NORMAL_SPEED_MS; // Current thief movement speed
+        let numThievesToPlace = THIEF_COUNT_NORMAL; // Number of thieves to place based on difficulty
+
+        let currentEnemyInBattle = null; // Reference to the enemy currently in battle
+        let lastEnemyMoveTime = 0; // Timestamp of the last enemy movement
+        let lastPlayerMoveTime = 0; // Timestamp of the last player movement
+        let animationFrameId = null; // Stores the ID returned by requestAnimationFrame for cancellation
+
+        // DOM Element References
+        const gameIntroScreen = document.getElementById('game-intro');
+        const gameScreen = document.getElementById('game-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const gameCanvas = document.getElementById('gameCanvas');
+        const ctx = gameCanvas.getContext('2d'); // 2D rendering context for the canvas
+
+        const playerHealthDisplay = document.getElementById('player-health');
+        const diamondsRemainingDisplay = document.getElementById('diamonds-remaining');
+        const enemiesRemainingDisplay = document.getElementById('enemies-remaining');
+        const battleScreen = document.getElementById('battle-screen');
+        const enemyBattleInfo = document.getElementById('enemy-battle-info');
+        const battleMessage = document.getElementById('battle-message');
+        const gameMessage = document.getElementById('game-message');
+        const gameOverTitle = document.getElementById('game-over-title');
+        const gameOverMessage = document.getElementById('game-over-message');
+
+        const restartButton = document.getElementById('restart-button');
+        const gameOverRestartButton = document.getElementById('game-over-restart');
+
+        // Set Canvas Dimensions
+        gameCanvas.width = CANVAS_WIDTH;
+        gameCanvas.height = CANVAS_HEIGHT;
+
+        /**
+         * Initializes or resets the game state for a new round.
+         */
+        function initializeGame() {
+            // Reset player, enemies, diamonds, and map
+            player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH };
+            enemies = [];
+            diamonds = [];
+            map = [];
+            currentEnemyInBattle = null;
+            lastEnemyMoveTime = 0;
+            lastPlayerMoveTime = 0;
+            gamePhase = 'playing'; // Set game phase to 'playing'
+            // Hide messages and battle screen
+            gameMessage.classList.add('hidden');
+            battleMessage.classList.add('hidden');
+            battleScreen.classList.add('hidden');
+            restartButton.classList.add('hidden');
+
+            // Determine number of thieves based on difficulty
+            if (difficulty === 'normal') {
+                numThievesToPlace = THIEF_COUNT_NORMAL;
+            } else if (difficulty === 'media') {
+                numThievesToPlace = THIEF_COUNT_MEDIA;
+            } else if (difficulty === 'extremepower') {
+                numThievesToPlace = THIEF_COUNT_EXTREMEPOWER;
+            }
+
+            // Generate map, place items, and reset UI/attacks
+            generateMap();
+            placeDiamonds();
+            placeEnemies(numThievesToPlace); // Pass the calculated number of thieves
+            resetAttackCooldowns();
+            updateUI();
+            startGameLoop(); // Start the game loop
+        }
+
+        /**
+         * Generates a simple grid-based city map.
+         * Tiles are randomly assigned as road (0) or building (1).
+         * Ensures the player's starting tile is a road.
+         */
+        function generateMap() {
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                map[y] = [];
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    // 25% chance for a building tile
+                    if (Math.random() < 0.25) {
+                        map[y][x] = 1; // Building (non-walkable)
+                    } else {
+                        map[y][x] = 0; // Road (walkable)
+                    }
+                }
+            }
+            // Ensure player's starting position is always a road
+            map[player.y][player.x] = 0;
+        }
+
+        /**
+         * Places diamonds randomly on walkable (road) tiles.
+         */
+        function placeDiamonds() {
+            let placed = 0;
+            while (placed < DIAMOND_COUNT) {
+                const x = Math.floor(Math.random() * MAP_WIDTH);
+                const y = Math.floor(Math.random() * MAP_HEIGHT);
+                // Place diamond if tile is a road and no diamond is already there
+                if (map[y][x] === 0 && !diamonds.some(d => d.x === x && d.y === y)) {
+                    diamonds.push({ x, y });
+                    placed++;
+                }
+            }
+        }
+
+        /**
+         * Places thieves randomly on walkable (road) tiles,
+         * ensuring they don't spawn on the player or diamonds initially.
+         * @param {number} count - The number of thieves to place.
+         */
+        function placeEnemies(count) {
+            let placed = 0;
+            while (placed < count) {
+                const x = Math.floor(Math.random() * MAP_WIDTH);
+                const y = Math.floor(Math.random() * MAP_HEIGHT);
+                // Check if the tile is a road, not player's position, not a diamond's position, and no other enemy is there
+                if (map[y][x] === 0 && !(x === player.x && y === player.y) && !diamonds.some(d => d.x === x && d.y === y) && !enemies.some(e => e.x === x && e.y === y)) {
+                    enemies.push({ x, y, health: ENEMY_MAX_HEALTH });
+                    placed++;
+                }
+            }
+        }
+
+        /**
+         * Resets all drone attack cooldowns and enables attack buttons.
+         */
+        function resetAttackCooldowns() {
+            for (const key in DRONE_ATTACKS) {
+                DRONE_ATTACKS[key].currentCooldown = 0;
+                updateProgressBar(DRONE_ATTACKS[key]);
+                document.getElementById(DRONE_ATTACKS[key].buttonId).disabled = false;
+            }
+        }
+
+        /**
+         * Updates the health, diamond, and enemy count displays.
+         */
+        function updateUI() {
+            playerHealthDisplay.textContent = `HP Fábio: ${player.health}`;
+            diamondsRemainingDisplay.textContent = `Diamantes Restantes: ${diamonds.length}`;
+            enemiesRemainingDisplay.textContent = `Ladrões Restantes: ${enemies.length}`;
+
+            // Update enemy health display during battle
+            if (gamePhase === 'battle' && currentEnemyInBattle) {
+                enemyBattleInfo.textContent = `Ladrão HP: ${currentEnemyInBattle.health}`;
+            }
+        }
+
+        /**
+         * Draws all game elements onto the canvas.
+         */
+        function draw() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Clear the entire canvas
+
+            // Draw map tiles
+            for (let y = 0; y < MAP_HEIGHT; y++) {
+                for (let x = 0; x < MAP_WIDTH; x++) {
+                    if (map[y][x] === 0) { // Road tile
+                        ctx.fillStyle = '#4a5568'; // Dark grey
+                    } else { // Building tile
+                        ctx.fillStyle = '#2d3748'; // Darker grey
+                    }
+                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Draw the filled rectangle
+                    ctx.strokeStyle = '#2d3748'; // Grid line color
+                    ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE); // Draw grid lines
+                }
+            }
+
+            // Set up font for emojis
+            ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Draw diamonds as emoji
+            diamonds.forEach(d => {
+                ctx.fillText('💎', d.x * TILE_SIZE + TILE_SIZE / 2, d.y * TILE_SIZE + TILE_SIZE / 2);
+            });
+
+            // Draw enemies as emoji
+            enemies.forEach(e => {
+                ctx.fillText('🦹', e.x * TILE_SIZE + TILE_SIZE / 2, e.y * TILE_SIZE + TILE_SIZE / 2);
+            });
+
+            // Draw player as emoji
+            ctx.fillText('👮', player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2);
+        }
+
+        /**
+         * The main game loop. This function is called repeatedly by requestAnimationFrame.
+         * @param {DOMHighResTimeStamp} timestamp - The current time provided by requestAnimationFrame.
+         */
+        function gameLoop(timestamp) {
+            if (gamePhase === 'playing') {
+                // Handle enemy movement based on their speed
+                if (timestamp - lastEnemyMoveTime > enemySpeed) {
+                    moveEnemies();
+                    lastEnemyMoveTime = timestamp;
+                }
+            } else if (gamePhase === 'battle') {
+                // Update cooldowns for drone attacks during battle
+                for (const key in DRONE_ATTACKS) {
+                    const attack = DRONE_ATTACKS[key];
+                    if (attack.currentCooldown > 0) {
+                        // Reduce cooldown based on elapsed time
+                        attack.currentCooldown = Math.max(0, attack.currentCooldown - (timestamp - lastEnemyMoveTime));
+                        updateProgressBar(attack); // Update visual progress bar
+                        // Disable button if still on cooldown
+                        document.getElementById(attack.buttonId).disabled = attack.currentCooldown > 0;
+                    }
+                }
+            }
+
+            draw(); // Redraw all game elements
+            animationFrameId = requestAnimationFrame(gameLoop); // Request next animation frame
+        }
+
+        /**
+         * Starts the main game loop, ensuring only one loop is active.
+         */
+        function startGameLoop() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId); // Cancel any existing loop
+            }
+            lastEnemyMoveTime = performance.now(); // Initialize for accurate first enemy move timing
+            lastPlayerMoveTime = performance.now(); // Initialize for accurate first player move timing
+            animationFrameId = requestAnimationFrame(gameLoop); // Start the new loop
+        }
+
+        /**
+         * Stops the main game loop.
+         */
+        function stopGameLoop() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId); // Cancel the animation frame request
+                animationFrameId = null;
+            }
+        }
+
+        /**
+         * Handles player movement based on keyboard arrow key input.
+         */
+        document.addEventListener('keydown', (e) => {
+            if (gamePhase !== 'playing') return; // Only allow movement in 'playing' phase
+
+            const now = performance.now();
+            // Prevent rapid consecutive movements within the PLAYER_SPEED_MS interval
+            if (now - lastPlayerMoveTime < PLAYER_SPEED_MS) return;
+
+            let newX = player.x;
+            let newY = player.y;
+
+            // Determine new coordinates based on arrow key pressed
+            if (e.key === 'ArrowUp') newY--;
+            else if (e.key === 'ArrowDown') newY++;
+            else if (e.key === 'ArrowLeft') newX--;
+            else if (e.key === 'ArrowRight') newX++;
+            else return; // Ignore non-movement keys
+
+            // Check if the new position is within map boundaries
+            if (newX >= 0 && newX < MAP_WIDTH && newY >= 0 && newY < MAP_HEIGHT) {
+                // Check if the target tile is walkable (not a building)
+                if (map[newY][newX] === 0) {
+                    player.x = newX; // Update player's x-coordinate
+                    player.y = newY; // Update player's y-coordinate
+                    lastPlayerMoveTime = now; // Update last move time
+                    checkEncounters(); // Check for battles after moving
+                    draw(); // Redraw the game scene immediately
+                }
+            }
+        });
+
+        /**
+         * Checks if the player has moved onto the same tile as an enemy.
+         * If so, initiates a battle.
+         */
+        function checkEncounters() {
+            for (let i = 0; i < enemies.length; i++) {
+                if (player.x === enemies[i].x && player.y === enemies[i].y) {
+                    startBattle(enemies[i]); // Start battle with the encountered enemy
+                    return; // Exit after finding the first encounter
+                }
+            }
+            checkWinCondition(); // Check for win condition after player moves and no battle starts
+        }
+
+        /**
+         * Moves each enemy towards the nearest diamond.
+         * If no diamonds are left, enemies move randomly.
+         */
+        function moveEnemies() {
+            enemies.forEach(enemy => {
+                let currentX = enemy.x;
+                let currentY = enemy.y;
+                let newX = currentX;
+                let newY = currentY;
+                let moved = false;
+
+                if (diamonds.length > 0) {
+                    let closestDiamond = null;
+                    let minDist = Infinity;
+
+                    diamonds.forEach(diamond => {
+                        const dist = Math.abs(currentX - diamond.x) + Math.abs(currentY - diamond.y);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestDiamond = diamond;
+                        }
+                    });
+
+                    if (closestDiamond) {
+                        const dx = closestDiamond.x - currentX;
+                        const dy = closestDiamond.y - currentY;
+
+                        // Prioritize moving horizontally or vertically towards the diamond
+                        // We'll build a list of preferred moves and then valid random moves
+                        let preferredMoves = [];
+                        if (dx !== 0) preferredMoves.push({ x: currentX + Math.sign(dx), y: currentY });
+                        if (dy !== 0) preferredMoves.push({ x: currentX, y: currentY + Math.sign(dy) });
+
+                        // Try preferred moves first
+                        for (let move of preferredMoves) {
+                            if (move.x >= 0 && move.x < MAP_WIDTH && move.y >= 0 && move.y < MAP_HEIGHT &&
+                                map[move.y][move.x] === 0 && !(move.x === player.x && move.y === player.y) && !enemies.some(e => e.x === move.x && e.y === move.y && e !== enemy)) {
+                                newX = move.x;
+                                newY = move.y;
+                                moved = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // If no direct path to diamond found or no diamonds left, or preferred move blocked, try random valid move
+                if (!moved) {
+                    const randomMoves = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // Down, Up, Right, Left
+                    let validRandomMoves = [];
+
+                    for (let move of randomMoves) {
+                        const testX = currentX + move[0];
+                        const testY = currentY + move[1];
+                        if (testX >= 0 && testX < MAP_WIDTH && testY >= 0 && testY < MAP_HEIGHT &&
+                            map[testY][testX] === 0 && !(testX === player.x && testY === player.y) && !enemies.some(e => e.x === testX && e.y === testY && e !== enemy)) {
+                            validRandomMoves.push({ x: testX, y: testY });
+                        }
+                    }
+
+                    if (validRandomMoves.length > 0) {
+                        // Pick a random valid move if any exist
+                        const randomChoice = validRandomMoves[Math.floor(Math.random() * validRandomMoves.length)];
+                        newX = randomChoice.x;
+                        newY = randomChoice.y;
+                        moved = true;
+                    }
+                }
+
+                if (moved) {
+                    enemy.x = newX;
+                    enemy.y = newY;
+                    checkDiamondCollection(enemy);
+                }
+            });
+        }
+
+        /**
+         * Checks if an enemy has moved onto a diamond's position.
+         * If so, the diamond is "collected" (removed from the game).
+         * @param {object} enemy - The enemy object that just moved.
+         */
+        function checkDiamondCollection(enemy) {
+            const diamondIndex = diamonds.findIndex(d => d.x === enemy.x && d.y === enemy.y);
+            if (diamondIndex !== -1) {
+                diamonds.splice(diamondIndex, 1); // Remove the collected diamond
+                updateUI(); // Update UI to reflect fewer diamonds
+                showMessage(`Um ladrão pegou um diamante!`, 'danger'); // Notify player
+                checkLoseCondition(); // Check if all diamonds are gone (lose condition)
+            }
+        }
+
+        /**
+         * Transitions the game into battle mode.
+         * @param {object} enemy - The enemy object that Fábio Agent is battling.
+         */
+        function startBattle(enemy) {
+            gamePhase = 'battle'; // Change game phase to battle
+            currentEnemyInBattle = enemy; // Set the current enemy being battled
+            battleScreen.classList.remove('hidden'); // Show the battle UI
+            gameCanvas.classList.add('hidden'); // Hide the map canvas during battle
+            showMessage(`Ladrão encontrado! Preparar para a batalha!`, 'info'); // Display battle start message
+            updateUI(); // Update UI to show enemy health
+            resetAttackCooldowns(); // Reset drone attack cooldowns for the battle
+        }
+
+        /**
+         * Ends the current battle and returns the game to map mode.
+         */
+        function endBattle() {
+            gamePhase = 'playing'; // Change game phase back to playing
+            currentEnemyInBattle = null; // Clear the current enemy in battle
+            battleScreen.classList.add('hidden'); // Hide the battle UI
+            gameCanvas.classList.remove('hidden'); // Show the map canvas
+            showMessage(`Batalha vencida!`, 'success'); // Display battle won message
+            checkWinCondition(); // Check if all enemies are defeated (win condition)
+            draw(); // Redraw the map to reflect changes (e.g., removed enemy)
+        }
+
+        /**
+         * Executes a drone attack during battle.
+         * @param {object} attack - The drone attack object (e.g., DRONE_ATTACKS.vrombulha).
+         */
+        function performAttack(attack) {
+            // Prevent attack if not in battle, no enemy, or attack is on cooldown
+            if (gamePhase !== 'battle' || !currentEnemyInBattle || attack.currentCooldown > 0) return;
+
+            // Apply damage to the current enemy
+            currentEnemyInBattle.health -= attack.damage;
+            showMessage(`Seu drone usou ${attack.name} e causou ${attack.damage} de dano!`, 'success');
+            updateUI(); // Update enemy health display
+
+            // Set the cooldown for the used attack
+            attack.currentCooldown = attack.cooldown;
+            updateProgressBar(attack); // Update visual progress bar
+            document.getElementById(attack.buttonId).disabled = true; // Disable button during cooldown
+
+            // Check if the enemy is defeated
+            if (currentEnemyInBattle.health <= 0) {
+                showMessage(`Ladrão eliminado!`, 'success');
+                // Remove the defeated enemy from the enemies array
+                enemies = enemies.filter(e => e !== currentEnemyInBattle);
+                setTimeout(endBattle, 1500); // Wait a bit for message then end battle
+            } else {
+                // If enemy is not defeated, they retaliate (simple: deal 1 damage to player)
+                player.health -= 1;
+                showMessage(`O ladrão contra-atacou! Fábio perdeu 1 HP.`, 'danger');
+                updateUI(); // Update player health display
+                checkLoseCondition(); // Check if player is defeated (lose condition)
+            }
+        }
+
+        /**
+         * Updates the visual progress bar for an attack's cooldown.
+         * @param {object} attack - The attack object with `cooldown`, `currentCooldown`, and `pbId`.
+         */
+        function updateProgressBar(attack) {
+            const progressBar = document.getElementById(attack.pbId);
+            if (progressBar) {
+                // Calculate progress as a percentage
+                const progress = ((attack.cooldown - attack.currentCooldown) / attack.cooldown) * 100;
+                progressBar.style.width = `${progress}%`; // Set width of the progress bar
+            }
+        }
+
+        /**
+         * Checks if the player has won the game (all thieves eliminated).
+         * If won, transitions to the game over screen with a victory message.
+         */
+        function checkWinCondition() {
+            if (enemies.length === 0) {
+                stopGameLoop(); // Stop the game loop
+                gamePhase = 'gameOver'; // Set game phase to game over
+                gameScreen.classList.add('hidden'); // Hide the main game screen
+                gameOverScreen.classList.remove('hidden'); // Show the game over screen
+                gameOverTitle.textContent = 'VITÓRIA!'; // Set victory title
+                gameOverTitle.classList.remove('text-red-500'); // Remove red color
+                gameOverTitle.classList.add('text-green-500'); // Add green color
+                gameOverMessage.textContent = 'Todos os ladrões foram eliminados! A cidade está segura!'; // Set victory message
+                restartButton.classList.remove('hidden'); // Show restart button on main screen too (for convenience)
+            }
+        }
+
+        /**
+         * Checks if the player has lost the game (all diamonds collected or player health is zero).
+         * If lost, transitions to the game over screen with a defeat message.
+         */
+        function checkLoseCondition() {
+            if (diamonds.length === 0 || player.health <= 0) {
+                stopGameLoop(); // Stop the game loop
+                gamePhase = 'gameOver'; // Set game phase to game over
+                gameScreen.classList.add('hidden'); // Hide the main game screen
+                gameOverScreen.classList.remove('hidden'); // Show the game over screen
+                gameOverTitle.textContent = 'GAME OVER!'; // Set game over title
+                gameOverTitle.classList.remove('text-green-500'); // Remove green color
+                gameOverTitle.classList.add('text-red-500'); // Add red color
+                // Set specific loss message based on cause
+                if (diamonds.length === 0) {
+                    gameOverMessage.textContent = 'Os ladrões levaram todos os diamantes!';
+                } else {
+                    gameOverMessage.textContent = 'Fábio Agent foi derrotado!';
+                }
+                restartButton.classList.remove('hidden'); // Show restart button
+            }
+        }
+
+        /**
+         * Displays a temporary message box on the screen.
+         * @param {string} message - The text content of the message.
+         * @param {string} type - The type of message ('info', 'success', 'danger') for styling.
+         */
+        function showMessage(message, type) {
+            // Determine which message element to use (battle or general game message)
+            const targetMessageElement = gamePhase === 'battle' ? battleMessage : gameMessage;
+            targetMessageElement.textContent = message; // Set message text
+            // Remove previous type classes and show the message box
+            targetMessageElement.classList.remove('hidden', 'bg-blue-600', 'bg-green-600', 'bg-red-600');
+            // Add appropriate background color based on message type
+            if (type === 'info') targetMessageElement.classList.add('bg-blue-600');
+            else if (type === 'success') targetMessageElement.classList.add('bg-green-600');
+            else if (type === 'danger') targetMessageElement.classList.add('bg-red-600');
+            else targetMessageElement.classList.add('bg-gray-600'); // Default grey
+
+            // Hide the message after a delay
+            setTimeout(() => {
+                targetMessageElement.classList.add('hidden');
+            }, 3000); // Message disappears after 3 seconds
+        }
+
+        // --- Event Listeners ---
+
+        // Event Listeners for Difficulty Selection Buttons
+        document.getElementById('difficulty-normal').addEventListener('click', () => {
+            difficulty = 'normal'; // Set difficulty
+            enemySpeed = ENEMY_NORMAL_SPEED_MS; // Set corresponding enemy speed
+            gameIntroScreen.classList.add('hidden'); // Hide intro screen
+            gameScreen.classList.remove('hidden'); // Show main game screen
+            initializeGame(); // Start the game
+        });
+        document.getElementById('difficulty-media').addEventListener('click', () => {
+            difficulty = 'media';
+            enemySpeed = ENEMY_MEDIA_SPEED_MS;
+            gameIntroScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            initializeGame();
+        });
+        document.getElementById('difficulty-extremepower').addEventListener('click', () => {
+            difficulty = 'extremepower';
+            enemySpeed = ENEMY_EXTREMEPOWER_SPEED_MS;
+            gameIntroScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            initializeGame();
+        });
+
+        // Event Listeners for Drone Attack Buttons in Battle
+        document.getElementById(DRONE_ATTACKS.vrombulha.buttonId).addEventListener('click', () => performAttack(DRONE_ATTACKS.vrombulha));
+        document.getElementById(DRONE_ATTACKS.oinikmask.buttonId).addEventListener('click', () => performAttack(DRONE_ATTACKS.oinikmask));
+        document.getElementById(DRONE_ATTACKS.niuciiii.buttonId).addEventListener('click', () => performAttack(DRONE_ATTACKS.niuciiii));
+
+        // Restart buttons from main game screen and game over screen
+        restartButton.addEventListener('click', () => {
+            gameScreen.classList.add('hidden'); // Hide game screen
+            gameIntroScreen.classList.remove('hidden'); // Show intro screen
+            stopGameLoop(); // Stop the game loop
+        });
+        gameOverRestartButton.addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden'); // Hide game over screen
+            gameIntroScreen.classList.remove('hidden'); // Show intro screen
+            stopGameLoop(); // Stop the game loop
+        });
+
+        // Initial setup for progress bars (to show them empty)
+        for (const key in DRONE_ATTACKS) {
+            updateProgressBar(DRONE_ATTACKS[key]);
+        }
+
+        // The game starts by displaying the introduction screen.
+        // The user must select a difficulty to begin playing.
+    </script>
+</body>
+</html>
