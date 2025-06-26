@@ -187,8 +187,15 @@
         const THIEF_COUNT_NORMAL = 5; // Número base de ladrões para dificuldade Normal
         const THIEF_COUNT_MEDIA = THIEF_COUNT_NORMAL * 2; // Dobro de ladrões para dificuldade Média
         const THIEF_COUNT_EXTREMEPOWER = THIEF_COUNT_NORMAL * 4; // Quádruplo de ladrões para dificuldade Extremepower
-        const NPC_NAMES = ['Gugu', 'Sekku', 'Dudu', 'Bruno', 'Érico']; // Nomes dos personagens não jogáveis
-        const NPC_EMOJI = '🚶'; // Emoji para NPCs
+        
+        // Mapeamento de nomes de NPCs para seus respectivos emojis
+        const NPC_EMOJIS = {
+            'Gugu': '👶', // Criança
+            'Sekku': '🍺', // Copo de chopp
+            'Dudu': '🏠', // Casa
+            'Bruno': '🍫', // Doce de brigadeiro (chocolate)
+            'Érico': '👨‍🔬' // Cientista
+        };
         const PLAYER_NAME = 'Fábio Agent'; // Nome do personagem jogável
 
         // Constante para limitar as tentativas de posicionamento
@@ -208,7 +215,7 @@
         let player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH, lastMoveTime: 0 }; // Posição e saúde do jogador
         let enemies = []; // Array para armazenar objetos de ladrões {x, y, health, currentSpeed, lastMoveTimestamp}
         let diamonds = []; // Array para armazenar objetos de diamantes {x, y}
-        let npcs = []; // Array para armazenar objetos de NPC {x, y, name, capturedBy: enemy_object || null}
+        let npcs = []; // Array para armazenar objetos de NPC {x, y, name, emoji, capturedBy: enemy_object || null}
         let map = []; // Array 2D representando o mapa da cidade (0 = Estrada, 1 = Prédio)
         let difficulty = 'normal'; // Configuração de dificuldade atual
         let numThievesToPlace = THIEF_COUNT_NORMAL; // Número de ladrões a serem colocados com base na dificuldade
@@ -404,9 +411,9 @@
             npcs = []; // Limpar NPCs existentes
             let placed = 0;
             let attempts = 0;
-            const maxTotalAttempts = NPC_NAMES.length * MAX_PLACEMENT_ATTEMPTS_PER_ENTITY;
+            const maxTotalAttempts = Object.keys(NPC_EMOJIS).length * MAX_PLACEMENT_ATTEMPTS_PER_ENTITY; // Usar o número de NPCs definido pelo mapeamento
 
-            NPC_NAMES.forEach(name => {
+            for (const name in NPC_EMOJIS) {
                 let npcPlaced = false;
                 let npcAttempts = 0;
                 while (!npcPlaced && npcAttempts < MAX_PLACEMENT_ATTEMPTS_PER_ENTITY) {
@@ -420,16 +427,16 @@
                     const isNpcSpot = npcs.some(n => n.x === x && n.y === y);
 
                     if (map[y][x] === 0 && !isPlayerSpot && !isDiamondSpot && !isEnemySpot && !isNpcSpot) {
-                        npcs.push({ x, y, name, capturedBy: null });
+                        npcs.push({ x, y, name, emoji: NPC_EMOJIS[name], capturedBy: null }); // Adicionar o emoji específico
                         npcPlaced = true;
                         placed++;
                     }
                     npcAttempts++;
                     attempts++;
                 }
-            });
-            if (placed < NPC_NAMES.length) {
-                console.warn(`[PlaceNPCs] Não foi possível colocar todos os ${NPC_NAMES.length} NPCs. Colocados: ${placed}.`);
+            }
+            if (placed < Object.keys(NPC_EMOJIS).length) {
+                console.warn(`[PlaceNPCs] Não foi possível colocar todos os ${Object.keys(NPC_EMOJIS).length} NPCs. Colocados: ${placed}.`);
             }
         }
 
@@ -497,24 +504,20 @@
             npcs.forEach(npc => {
                 let displayX = npc.x;
                 let displayY = npc.y;
-                let displayName = npc.name;
+                let displayEmoji = npc.emoji; // Usar o emoji específico do NPC
 
                 if (npc.capturedBy) {
                     // Se capturado, desenhe o NPC na posição do ladrão
                     displayX = npc.capturedBy.x;
                     displayY = npc.capturedBy.y;
-                    // Opcional: ajustar um pouco a posição para não sobrepor completamente o ladrão,
-                    // ou mudar o emoji para indicar que está sendo arrastado/seguindo
-                    ctx.font = `${TILE_SIZE * 0.5}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`; // Menor para NPC capturado
-                    ctx.fillText('⛓️', displayX * TILE_SIZE + TILE_SIZE * 0.7, displayY * TILE_SIZE + TILE_SIZE * 0.7); // Pequena corrente ou outro indicador
                 }
                 
                 ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`; // Reset font for emoji
-                ctx.fillText(NPC_EMOJI, displayX * TILE_SIZE + TILE_SIZE / 2, displayY * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Adjust Y for emoji
+                ctx.fillText(displayEmoji, displayX * TILE_SIZE + TILE_SIZE / 2, displayY * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Adjust Y for emoji
 
                 ctx.font = `${TILE_SIZE * 0.3}px 'Inter', sans-serif`; // Smaller font for name
                 ctx.fillStyle = '#e2e8f0'; // Light text color
-                ctx.fillText(displayName, displayX * TILE_SIZE + TILE_SIZE / 2, displayY * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Draw name below emoji
+                ctx.fillText(npc.name, displayX * TILE_SIZE + TILE_SIZE / 2, displayY * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Draw name below emoji
             });
 
             // Desenhar jogador como emoji e nome
@@ -673,7 +676,7 @@
                 // Verificar se a potencial nova posição está dentro dos limites do mapa e é um tile caminhável (estrada)
                 if (testX >= 0 && testX < MAP_WIDTH && testY >= 0 && testY < MAP_HEIGHT &&
                     map[testY][testX] === 0) {
-                    // Verificar se a posição potencial não está ocupada pelo jogador
+                    // Verificar se a posição potencial não está ocupada pelo jogador ou por outro ladrão
                     if (!(testX === player.x && testY === player.y)) {
                         let isBlockedByAnotherThief = false;
                         for (let otherEnemy of enemies) {
@@ -683,8 +686,8 @@
                             }
                         }
                         
-                        // Não precisamos mais verificar NPCs livres aqui, pois queremos que o ladrão
-                        // possa se mover sobre eles para capturá-los.
+                        // Permitir que o ladrão se mova para a posição de um NPC não capturado para pegá-lo
+                        // Não há mais necessidade de verificar NPCs aqui como "bloqueio"
                         
                         if (!isBlockedByAnotherThief) {
                             // Este é um movimento válido, pois não está bloqueado por jogador ou outro ladrão.
