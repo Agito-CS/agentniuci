@@ -134,6 +134,11 @@
         <!-- Battle Screen (hidden by default) -->
         <div id="battle-screen" class="hidden w-full text-center p-4">
             <h3 class="text-2xl font-bold mb-4 text-red-400">Batalha!</h3>
+            <div class="flex justify-around items-center mb-4">
+                <div class="text-6xl">👮</div> <!-- Fábio Agent emoji -->
+                <div class="text-4xl text-gray-400">VS</div>
+                <div class="text-6xl" id="battle-enemy-emoji">🦹</div> <!-- Enemy emoji -->
+            </div>
             <div id="enemy-battle-info" class="mb-4 text-xl">Ladrão HP: 10</div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
                 <!-- Drone Attack Buttons -->
@@ -221,6 +226,7 @@
         const gameMessage = document.getElementById('game-message');
         const gameOverTitle = document.getElementById('game-over-title');
         const gameOverMessage = document.getElementById('game-over-message');
+        const battleEnemyEmojiDisplay = document.getElementById('battle-enemy-emoji'); // New: Reference for enemy emoji in battle
 
         const restartButton = document.getElementById('restart-button');
         const gameOverRestartButton = document.getElementById('game-over-restart');
@@ -486,6 +492,7 @@
         /**
          * Moves each enemy towards the nearest diamond.
          * If no diamonds are left, enemies move randomly.
+         * Includes logic to avoid getting stuck against walls and other enemies.
          */
         function moveEnemies() {
             enemies.forEach(enemy => {
@@ -495,60 +502,76 @@
                 let newY = currentY;
                 let moved = false;
 
+                let targetDiamond = null;
                 if (diamonds.length > 0) {
-                    let closestDiamond = null;
+                    // Find the closest diamond for the current enemy
                     let minDist = Infinity;
-
                     diamonds.forEach(diamond => {
                         const dist = Math.abs(currentX - diamond.x) + Math.abs(currentY - diamond.y);
                         if (dist < minDist) {
                             minDist = dist;
-                            closestDiamond = diamond;
+                            targetDiamond = diamond;
                         }
                     });
+                }
 
-                    if (closestDiamond) {
-                        const dx = closestDiamond.x - currentX;
-                        const dy = closestDiamond.y - currentY;
+                // Define possible movement directions (dx, dy)
+                const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // Down, Up, Right, Left
 
-                        // Prioritize moving horizontally or vertically towards the diamond
-                        // We'll build a list of preferred moves and then valid random moves
-                        let preferredMoves = [];
-                        if (dx !== 0) preferredMoves.push({ x: currentX + Math.sign(dx), y: currentY });
-                        if (dy !== 0) preferredMoves.push({ x: currentX, y: currentY + Math.sign(dy) });
+                let validMoves = [];
 
-                        // Try preferred moves first
-                        for (let move of preferredMoves) {
-                            if (move.x >= 0 && move.x < MAP_WIDTH && move.y >= 0 && move.y < MAP_HEIGHT &&
-                                map[move.y][move.x] === 0 && !(move.x === player.x && move.y === player.y) && !enemies.some(e => e.x === move.x && e.y === move.y && e !== enemy)) {
-                                newX = move.x;
-                                newY = move.y;
-                                moved = true;
-                                break;
+                // Evaluate each possible direction
+                for (let dir of directions) {
+                    const testX = currentX + dir[0];
+                    const testY = currentY + dir[1];
+
+                    // Check if the potential new position is within map bounds and is a walkable tile (road)
+                    if (testX >= 0 && testX < MAP_WIDTH && testY >= 0 && testY < MAP_HEIGHT &&
+                        map[testY][testX] === 0) {
+                        // Check if the potential position is not occupied by the player
+                        if (!(testX === player.x && testY === player.y)) {
+                            // Check if the potential position is not occupied by another enemy (excluding self)
+                            let isOccupiedByOtherEnemy = false;
+                            for (let otherEnemy of enemies) {
+                                if (otherEnemy !== enemy && otherEnemy.x === testX && otherEnemy.y === testY) {
+                                    isOccupiedByOtherEnemy = true;
+                                    break;
+                                }
+                            }
+                            if (!isOccupiedByOtherEnemy) {
+                                // This is a valid and unblocked move
+                                validMoves.push({ x: testX, y: testY, dirX: dir[0], dirY: dir[1] });
                             }
                         }
                     }
                 }
 
-                // If no direct path to diamond found or no diamonds left, or preferred move blocked, try random valid move
-                if (!moved) {
-                    const randomMoves = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // Down, Up, Right, Left
-                    let validRandomMoves = [];
+                // Sort valid moves based on desirability
+                if (validMoves.length > 0) {
+                    if (targetDiamond) {
+                        // Sort by Manhattan distance to the target diamond (ascending)
+                        validMoves.sort((a, b) => {
+                            const distA = Math.abs(a.x - targetDiamond.x) + Math.abs(a.y - targetDiamond.y);
+                            const distB = Math.abs(b.x - targetDiamond.x) + Math.abs(b.y - targetDiamond.y);
+                            return distA - distB;
+                        });
 
-                    for (let move of randomMoves) {
-                        const testX = currentX + move[0];
-                        const testY = currentY + move[1];
-                        if (testX >= 0 && testX < MAP_WIDTH && testY >= 0 && testY < MAP_HEIGHT &&
-                            map[testY][testX] === 0 && !(testX === player.x && testY === player.y) && !enemies.some(e => e.x === testX && e.y === testY && e !== enemy)) {
-                            validRandomMoves.push({ x: testX, y: testY });
-                        }
-                    }
+                        // Filter for moves that achieve the minimum distance
+                        const minDistance = Math.abs(validMoves[0].x - targetDiamond.x) + Math.abs(validMoves[0].y - targetDiamond.y);
+                        const bestMoves = validMoves.filter(move => {
+                            return (Math.abs(move.x - targetDiamond.x) + Math.abs(move.y - targetDiamond.y)) === minDistance;
+                        });
 
-                    if (validRandomMoves.length > 0) {
-                        // Pick a random valid move if any exist
-                        const randomChoice = validRandomMoves[Math.floor(Math.random() * validRandomMoves.length)];
-                        newX = randomChoice.x;
-                        newY = randomChoice.y;
+                        // Randomly pick one of the best moves to introduce variety
+                        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                        newX = chosenMove.x;
+                        newY = chosenMove.y;
+                        moved = true;
+                    } else {
+                        // If no diamonds left, pick a random valid move to keep moving
+                        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                        newX = randomMove.x;
+                        newY = randomMove.y;
                         moved = true;
                     }
                 }
@@ -587,6 +610,8 @@
             gameCanvas.classList.add('hidden'); // Hide the map canvas during battle
             showMessage(`Ladrão encontrado! Preparar para a batalha!`, 'info'); // Display battle start message
             updateUI(); // Update UI to show enemy health
+            // You can set the enemy emoji here if you had different types of enemies
+            // battleEnemyEmojiDisplay.textContent = '🦹'; // Example: Set default thief emoji
             resetAttackCooldowns(); // Reset drone attack cooldowns for the battle
         }
 
