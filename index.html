@@ -773,7 +773,7 @@
             if (diamondIndex !== -1) {
                 diamonds.splice(diamondIndex, 1); // Remover o diamante coletado
                 updateUI(); // Atualizar UI para refletir menos diamantes
-                showMessage(`Um ladrão pegou um diamante!`, 'danger'); // Notificar o jogador
+                // showMessage(`Um ladrão pegou um diamante!`, 'danger'); // Mensagem removida
                 checkLoseCondition(); // Verificar se todos os diamantes se foram (condição de derrota)
             }
         }
@@ -1009,4 +1009,3 @@
     </script>
 </body>
 </html>
-
