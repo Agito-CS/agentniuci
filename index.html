@@ -185,6 +185,9 @@
         const THIEF_COUNT_NORMAL = 5; // Base number of thieves for Normal difficulty
         const THIEF_COUNT_MEDIA = THIEF_COUNT_NORMAL * 2; // Double thieves for Media difficulty
         const THIEF_COUNT_EXTREMEPOWER = THIEF_COUNT_NORMAL * 4; // Quadruple thieves for Extremepower difficulty
+        const NPC_NAMES = ['Gugu', 'Sekku', 'Dudu', 'Bruno', 'Érico']; // Names of non-playable characters
+        const NPC_EMOJI = '🚶'; // Emoji for NPCs
+        const PLAYER_NAME = 'Fábio Agent'; // Name for the playable character
 
         // Player & Drone Attack Statistics
         const PLAYER_MAX_HEALTH = 100;
@@ -200,6 +203,7 @@
         let player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH }; // Player's position and health
         let enemies = []; // Array to store thief objects {x, y, health}
         let diamonds = []; // Array to store diamond objects {x, y}
+        let npcs = []; // Array to store NPC objects {x, y, name, capturedBy: enemy_object || null}
         let map = []; // 2D array representing the city map (0 = Road, 1 = Building)
         let difficulty = 'normal'; // Current difficulty setting
         let enemySpeed = ENEMY_NORMAL_SPEED_MS; // Current thief movement speed
@@ -226,7 +230,7 @@
         const gameMessage = document.getElementById('game-message');
         const gameOverTitle = document.getElementById('game-over-title');
         const gameOverMessage = document.getElementById('game-over-message');
-        const battleEnemyEmojiDisplay = document.getElementById('battle-enemy-emoji'); // New: Reference for enemy emoji in battle
+        const battleEnemyEmojiDisplay = document.getElementById('battle-enemy-emoji'); // Reference for enemy emoji in battle
 
         const restartButton = document.getElementById('restart-button');
         const gameOverRestartButton = document.getElementById('game-over-restart');
@@ -243,6 +247,7 @@
             player = { x: 0, y: 0, health: PLAYER_MAX_HEALTH };
             enemies = [];
             diamonds = [];
+            npcs = []; // Reset NPCs
             map = [];
             currentEnemyInBattle = null;
             lastEnemyMoveTime = 0;
@@ -267,6 +272,7 @@
             generateMap();
             placeDiamonds();
             placeEnemies(numThievesToPlace); // Pass the calculated number of thieves
+            placeNPCs(); // Place NPCs after map, diamonds, and enemies
             resetAttackCooldowns();
             updateUI();
             startGameLoop(); // Start the game loop
@@ -328,6 +334,30 @@
         }
 
         /**
+         * Places NPCs randomly on walkable (road) tiles,
+         * ensuring they don't spawn on player, enemies, or diamonds.
+         */
+        function placeNPCs() {
+            npcs = []; // Clear existing NPCs
+            NPC_NAMES.forEach(name => {
+                let placed = false;
+                while (!placed) {
+                    const x = Math.floor(Math.random() * MAP_WIDTH);
+                    const y = Math.floor(Math.random() * MAP_HEIGHT);
+                    // Check if the tile is a road, not player's position, not a diamond's position, not an enemy's position, and not another NPC's position
+                    if (map[y][x] === 0 && !(x === player.x && y === player.y) &&
+                        !diamonds.some(d => d.x === x && d.y === y) &&
+                        !enemies.some(e => e.x === x && e.y === y) &&
+                        !npcs.some(n => n.x === x && n.y === y)) {
+                        npcs.push({ x, y, name, capturedBy: null });
+                        placed = true;
+                    }
+                }
+            });
+        }
+
+
+        /**
          * Resets all drone attack cooldowns and enables attack buttons.
          */
         function resetAttackCooldowns() {
@@ -372,12 +402,10 @@
                 }
             }
 
-            // Set up font for emojis
+            // Draw diamonds as emoji
             ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-
-            // Draw diamonds as emoji
             diamonds.forEach(d => {
                 ctx.fillText('💎', d.x * TILE_SIZE + TILE_SIZE / 2, d.y * TILE_SIZE + TILE_SIZE / 2);
             });
@@ -387,8 +415,20 @@
                 ctx.fillText('🦹', e.x * TILE_SIZE + TILE_SIZE / 2, e.y * TILE_SIZE + TILE_SIZE / 2);
             });
 
-            // Draw player as emoji
-            ctx.fillText('👮', player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2);
+            // Draw NPCs as emoji and name
+            npcs.forEach(npc => {
+                ctx.fillText(NPC_EMOJI, npc.x * TILE_SIZE + TILE_SIZE / 2, npc.y * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Adjust Y for emoji
+                ctx.font = `${TILE_SIZE * 0.3}px 'Inter', sans-serif`; // Smaller font for name
+                ctx.fillStyle = '#e2e8f0'; // Light text color
+                ctx.fillText(npc.name, npc.x * TILE_SIZE + TILE_SIZE / 2, npc.y * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Draw name below emoji
+            });
+
+            // Draw player as emoji and name
+            ctx.font = `${TILE_SIZE * 0.8}px 'Segoe UI Emoji', 'Apple Color Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif`; // Reset font for emoji
+            ctx.fillText('👮', player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2 - TILE_SIZE * 0.15); // Adjust Y for emoji
+            ctx.font = `${TILE_SIZE * 0.3}px 'Inter', sans-serif`; // Smaller font for name
+            ctx.fillStyle = '#e2e8f0'; // Light text color
+            ctx.fillText(PLAYER_NAME, player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2 + TILE_SIZE * 0.3); // Draw name below emoji
         }
 
         /**
@@ -580,7 +620,22 @@
                     enemy.x = newX;
                     enemy.y = newY;
                     checkDiamondCollection(enemy);
+
+                    // Check for NPC capture after enemy moves
+                    const capturedNpc = npcs.find(npc => npc.x === enemy.x && npc.y === enemy.y && !npc.capturedBy);
+                    if (capturedNpc) {
+                        capturedNpc.capturedBy = enemy; // Assign the thief as captor
+                        showMessage(`${capturedNpc.name} foi capturado por um ladrão!`, 'danger');
+                    }
                 }
+
+                // Update positions of already captured NPCs
+                npcs.forEach(npc => {
+                    if (npc.capturedBy === enemy) { // If this enemy captured this NPC
+                        npc.x = enemy.x;
+                        npc.y = enemy.y;
+                    }
+                });
             });
         }
 
@@ -610,8 +665,6 @@
             gameCanvas.classList.add('hidden'); // Hide the map canvas during battle
             showMessage(`Ladrão encontrado! Preparar para a batalha!`, 'info'); // Display battle start message
             updateUI(); // Update UI to show enemy health
-            // You can set the enemy emoji here if you had different types of enemies
-            // battleEnemyEmojiDisplay.textContent = '🦹'; // Example: Set default thief emoji
             resetAttackCooldowns(); // Reset drone attack cooldowns for the battle
         }
 
@@ -649,6 +702,31 @@
             // Check if the enemy is defeated
             if (currentEnemyInBattle.health <= 0) {
                 showMessage(`Ladrão eliminado!`, 'success');
+
+                // Release any captured NPC
+                npcs.forEach(npc => {
+                    if (npc.capturedBy === currentEnemyInBattle) {
+                        npc.capturedBy = null; // Release the NPC
+                        // Find a new safe spot for the rescued NPC
+                        let newNpcX, newNpcY;
+                        let placedNpc = false;
+                        while (!placedNpc) {
+                            newNpcX = Math.floor(Math.random() * MAP_WIDTH);
+                            newNpcY = Math.floor(Math.random() * MAP_HEIGHT);
+                            // Check if the tile is a road, not player's position, not a diamond's position, and not occupied by any enemy or other NPC
+                            if (map[newNpcY][newNpcX] === 0 && !(newNpcX === player.x && newNpcY === player.y) &&
+                                !diamonds.some(d => d.x === newNpcX && d.y === newNpcY) &&
+                                !enemies.some(e => e.x === newNpcX && e.y === newNpcY) &&
+                                !npcs.some(n => n !== npc && n.x === newNpcX && n.y === newNpcY)) {
+                                npc.x = newNpcX;
+                                npc.y = newNpcY;
+                                placedNpc = true;
+                            }
+                        }
+                        showMessage(`${npc.name} foi salvo!`, 'info');
+                    }
+                });
+
                 // Remove the defeated enemy from the enemies array
                 enemies = enemies.filter(e => e !== currentEnemyInBattle);
                 setTimeout(endBattle, 1500); // Wait a bit for message then end battle
